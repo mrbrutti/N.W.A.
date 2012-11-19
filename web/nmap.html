@@ -1,0 +1,93 @@
+<html>
+  <head>
+  	<link href="http://fonts.googleapis.com/css?family=Alfa+Slab+One|Aldrich" rel="stylesheet" type="text/css">
+  	<title>Nmap Results</title>
+  	<link rel="stylesheet" type="text/css" href="/css/custom.css">
+    <link rel="stylesheet" type="text/css" href="/css/search.css">
+  </head>
+  <body>
+  	<script src="/js/helper.js"></script>
+  	<div class=main_container>
+  		<div class=main_title>
+  			<a class=title_link href="/"><span class=span_title>N.W.A.</span></a>
+  		</div>
+  		<div class=header>
+  		</div>
+  		<div class=sub_title>
+  			<span class=span_subtitle>Nmap With Attitude</span>
+  		</div>
+  		<div class=main_menu>
+        <!--<a href="/"><span class=menu_buttons>Scans</span></a>-->
+        <a href="/"><span class=menu_buttons>IPs</span></a>
+        <a href="/list?type=port"><span class=menu_buttons>Ports</span></a>
+        <a href="/list?type=os"><span class=menu_buttons>OSs</span></a>
+        <span class=search_button onclick="display_search();" >Search</span>
+      </div>
+      <div class=search_menu style="display: none;">
+        <div class=search_form>
+          <form class="searchform" action="/search?">
+            <select class="optionfield" name="type">
+              <option value="banner">Banner</option>
+              <option value="os">OS</option>
+              <option value="service">Service</option>
+              <option value="port">Port</option>
+            </select>
+            <input class="searchfield" type="text" value="Search..." onfocus="if (this.value == 'Search...') {this.value = '';}" onblur="if (this.value == '') {this.value = 'Search...';}" name="query"/>
+            <input class="searchbutton" type="submit" value="Go"/>
+          </form>
+        </div>
+      </div>
+
+  		{{ if .}}
+  		<div class=main_iplist>
+	  		<table class=nmap_list>
+	      	<tr>
+					<th>IP</th>
+					<th>OS</th>
+					<th>Open Ports</th>
+	      	</tr>
+	       {{range .}}
+	       {{ if .OpenPorts}}
+	      	<tr class=ip_row>
+						<td><a class="iplink" href="/ip/{{.Address.Addr}}">{{.Address.Addr}}</a></td>
+						<td>{{.OSGuess}}</td>
+						<td>					
+							{{range .OpenPorts}}
+							{{.Portid}}/{{.Service.Name}}</br>
+							{{end}}
+						</td>
+	      	</tr>
+	      	{{end}}
+	      	{{end}}
+	    	</table>
+  		</div>
+  		<div>
+  			<div class=prev>
+  				<script>
+            var next = nmap_prev(); 
+            document.write("<a class=prenex href=\"/?start=" + next + 
+                           "\"><< " + next + "-" + (next +49) + "</a>");
+          </script>
+  			</div>
+  			<div class=next>
+  				<script>
+            var next = nmap_next(); 
+            document.write("<a class=prenex href=\"/?start=" + next + 
+                           "\">" + next + "-" + (next +49) + " >></a>");
+          </script>
+  		</div>
+  	</div>
+    {{else}}
+    <div class=error>
+      <span>No hosts were found</span>
+    </div> 
+    {{end}}
+    </br>
+  </div>
+  <div class=footerline></div>
+  <div class=footer>
+    <br>
+    <span class=footer_text>Copyright 2012 - EvilRovot</span>
+  </div>
+  </body>
+</html>

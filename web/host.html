@@ -1,0 +1,239 @@
+<html>
+  <head>
+    <link href="http://fonts.googleapis.com/css?family=Alfa+Slab+One|Aldrich" rel="stylesheet" type="text/css">
+    <title>Nmap Results</title>
+    <link rel="stylesheet" type="text/css" href="/css/custom.css">
+    <link rel="stylesheet" type="text/css" href="/css/host.css">
+    <link rel="stylesheet" type="text/css" href="/css/search.css">
+  </head>
+  <body>
+    <script src="/js/helper.js"></script>
+    <div class=main_container>
+      <div class=main_title>
+        <a class=title_link href="/"><span class=span_title>N.W.A.</span></a>
+      </div>
+      <div class=header>
+      </div>
+      <div class=sub_title>
+        <span class=span_subtitle>Nmap With Attitude</span>
+      </div>
+      <div class=main_menu>
+        <!--<a href="/"><span class=menu_buttons>Scans</span></a>-->
+        <a href="/"><span class=menu_buttons>IPs</span></a>
+        <a href="/list?type=port"><span class=menu_buttons>Ports</span></a>
+        <a href="/list?type=os"><span class=menu_buttons>OSs</span></a>
+        <span class=search_button onclick="display_search();" >Search</span>
+      </div>
+      <div class=search_menu style="display: none;">
+        <div class=search_form>
+          <form class="searchform" action="/search?">
+            <select class="optionfield" name="type">
+              <option value="banner">Banner</option>
+              <option value="os">OS</option>
+              <option value="service">Service</option>
+              <option value="port">Port</option>
+            </select>
+            <input class="searchfield" type="text" value="Search..." onfocus="if (this.value == 'Search...') {this.value = '';}" onblur="if (this.value == '') {this.value = 'Search...';}" name="query"/>
+            <input class="searchbutton" type="submit" value="Go"/>
+          </form>
+        </div>
+      </div>
+  		<div class=host_info>
+  			<div class=ip_icon alt=Unknown>
+  			</div>
+  			<div class=ip_info>
+  				<span class=ip_info_addr>{{.Address.Addr}}</span>
+  				<br>
+  				<span class=ip_info_os>{{range .HostNames}}{{.Name}},{{end}}</span>
+  			</div>
+  		</div>
+  		<br><br><br></br>
+  		<div class=main_iplist>
+  			<!-- Open/Close Port section -->
+				<div class=title_menu>
+					<span class=title>Open/Close Ports</span>
+				</div>					
+				<table class=port_list>
+		      <tr>
+						<th>Port</th>
+						<th>Service</th>
+						<th>state</th>
+						<th>Name</th>
+						<th>Product</th>
+						<th>Version</th>
+						<th>ExtraInfo</th>
+						<th>OSType</th>
+						<th>Method</th>
+						<th>Conf</th>
+						<th>FP</th>					
+						<th>Scripts</th>
+		      </tr>
+					{{range .Ports}}
+		      <tr class=ip_row>
+						<td>{{.Portid}}</td>
+						<td>{{.Service.Name}}</td>
+						<td><span class={{.State.State}}port>{{.State.State}}</span></td>
+						<td>{{.Service.Name}}</td>
+						<td>{{.Service.Product}}</td>
+						<td>{{.Service.Version}}</td>
+						<td>{{.Service.ExtraInfo}}</td>
+						<td>{{.Service.OSType}}</td>
+						<td>{{.Service.Method}}</td>
+						<td>{{.Service.Conf}}</td>
+						{{if .Service.FingerPrint}}
+						<td><a class="iplink" href="#fingerprint{{.Portid}}">FP</a></td>
+						{{else}}
+						<td>--</td>
+						{{end}}
+						{{if .Scripts}}
+						<td><a class="iplink" href="#port{{.Portid}}">Info</a></td>
+						{{else}}
+						<td>--</td>
+						{{end}}
+		      </tr>
+		      {{end}}
+		    </table>
+				</br>
+				
+				<!-- Fingerprint section -->
+				<div class=title_menu><span class=title>Port Fingerprint</span></div>
+				{{range .Ports}}
+		    {{if .Service.FingerPrint}}
+
+		    <div class=scriptContainer>
+		    	<div id="fingerprint{{.Portid}}" class=portIdScript >
+		    		<span>Port: {{.Portid}}</span>
+		    	</div>
+		    	<div class=scriptID>fingerprint</div>
+			    <div class=scriptOutput><span>{{html .Service.FingerPrint}}</span></div>
+		    </div>
+		    {{end}}
+		    {{end}}
+
+				<!-- Scripts section -->
+				<div class=title_menu><span class=title>Scripts</span></div>
+				{{range .Ports}}
+		    {{ if .Scripts}}
+		    <div class=scriptContainer>
+		    	<div id="port{{.Portid}}" class=portIdScript ><span>Port: {{.Portid}}</span></div>
+		    	{{range .Scripts}}
+			    <div class=scriptID>{{.Id}}</div>
+			    <div class=scriptOutput><span>{{.Output}}</span></div>
+		    	{{end}}
+		  	</div>
+		    {{end}}
+		    {{end}}
+		  	
+		  	<!-- OS section -->
+		  	<div class=title_menu><span class=title>Operating System Detection</span></div>
+		  	<div class=scriptContainer>
+		  		<p>Ports Used: |
+		  			{{range .OS.PortsUsed}}
+		  			{{.Portid}}/{{.Protocol}} <span class={{.State}}port>{{.State}}</span> |
+		  			{{end}}
+		  		</p>
+		  		<p>OS FingerPrint:</p>
+		  	 	<div class=scriptOutput><span>{{.OS.OSFingerPrint.Fingerprint}}</span></div>
+		  		<p>OSMatches data:</br></p>
+		  		<table class=port_list>
+		      	<tr>
+							<th>Name</th>
+							<th>Accuracy</th>
+							<th>Line</th>
+							<th>Type</th>
+							<th>Vendor</th>
+							<th>Family</th>
+							<th>Gen</th>
+							<th>Accuracy</th>
+							<th>CPEs</th>
+		      	</tr>
+		  	  	{{range .OS.OSMatches}}
+		  	  	<tr class=ip_row>
+		  				<td>{{.Name}}</td>
+		  				<td>{{.Accuracy}}</td>
+		  				<td>{{.Line}}</td>
+		  				<td>{{range .OSClasses}} {{.Type}}</br>{{end}}</td>
+		  				<td>{{range .OSClasses}} {{.Vendor}}</br>{{end}}</td>
+		  				<td>{{range .OSClasses}} {{.OSFamily}}</br>{{end}}</td>
+		  				<td>{{range .OSClasses}} {{.OSGen}}</br>{{end}}</td>
+		  				<td>{{range .OSClasses}} {{.Accuracy}}</br>{{end}}</td>
+		  				<td>{{range .OSClasses}} {{range .CPEs}} {{.Value}}</br>{{end}}</td>
+							{{end}}
+		  			</tr>
+		  			{{end}}
+		  		</table>
+				</div>
+				<div class=title_menu><span class=title>Traceroute</span></div>
+				</div class=traceroute>
+					<svg></svg>
+			  	<script src="/js/d3.v2.js"></script>
+					<script>
+				 		var width = 800, height = 500;
+
+						var color = d3.scale.category20();
+
+						var force = d3.layout.force()
+						    .charge(-750)
+						    .linkDistance(function(d) { return d.value / 2; })
+						    .gravity(0.1)
+						    .size([width, height]);
+
+						var svg = d3.selectAll("svg")
+						    .attr("width", width)
+						    .attr("height", height);
+
+						d3.json("/json/{{.Address.Addr}}" , function(graph) {
+						  force
+						      .nodes(graph.nodes)
+						      .links(graph.links)
+						      .start();
+
+						  var link = svg.selectAll("line.link")
+						      .data(graph.links)
+						    .enter().append("line")
+						      .attr("class", "link")
+						      .style("stroke-width", function(d) { return Math.sqrt(d.value)/1.5; })
+						      .style("length", function(d) { return d.value; }); 
+
+						  var node = svg.selectAll("circle.node")
+						      .data(graph.nodes)
+						    .enter().append("g")
+						      .attr("class", "node")
+						      .call(force.drag);
+
+						    node.append("image")
+						      .attr("xlink:href", "/images/monitor.png")
+      						.attr("x", -16)
+      						.attr("y", -16)
+      						.attr("width", 32)
+      						.attr("height", 32);
+						    	
+  							node.append("text")
+  							    .attr("dx", 12)
+  							    .attr("class", "nodetext")
+  							    .attr("dy", ".35em")
+  							    .text(function(d) { return d.name + " - " + d.group + "/RTT(" + d.rtt + ")" });
+
+						  force.on("tick", function() {
+						    link.attr("x1", function(d) { return d.source.x; })
+						        .attr("y1", function(d) { return d.source.y; })
+						        .attr("x2", function(d) { return d.target.x; })
+						        .attr("y2", function(d) { return d.target.y; });
+
+						    node.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+						  });
+						});
+	    		</script>
+					<center><span>Note: The higher the link width the higher the RTT.</span></center>
+								</br>
+				<a class="iplink" href="javascript:history.back();"><< BACK</a>
+				</div>
+			</div>
+  	</div>
+  	<div class=footerline></div>
+  		<div class=footer>
+    	<br>
+    	<span class=footer_text>Copyright © 2012 by EvilRovot.</span>
+  	</div>
+  </body>
+</html>
