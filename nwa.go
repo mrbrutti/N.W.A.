@@ -132,8 +132,11 @@ var v = nmap.Scan{}
 
 const lenPath = len("/ip/")
 
-var nmapfile = goopt.String([]string{"-v", "--file"},
+var nmapfile = goopt.String([]string{"-f", "--file"},
 	"", "Name of the .xml nmap file")
+
+var webserverport = goopt.String([]string{"-p", "--port"},
+	"", "Port to host Web Server")
 
 func main() {
 	goopt.Description = func() string {
@@ -146,7 +149,7 @@ func main() {
 	if *nmapfile != "" {
 		fmt.Printf("Processing nmap (%s).\n", *nmapfile)
 		go nmap.Parse(&v, *nmapfile)
-		fmt.Print("Hosting Nmap results in http://localhost:8080\n")
+		
 
 		// Static Files
 		http.Handle("/js/", http.StripPrefix("/js/",
@@ -165,8 +168,16 @@ func main() {
 		http.HandleFunc("/search", SearchHandler)
 
 		//Launch web server in 8080
-		http.ListenAndServe(":8080", nil)
+		if *webserverport != "" {
+			fmt.Printf("Hosting Nmap results in http://localhost:%s\n", *webserverport)
+			http.ListenAndServe(fmt.Sprintf(":%s",*webserverport), nil)
+		} else {
+			fmt.Print("Hosting Nmap results in http://localhost:8080\n")
+			http.ListenAndServe(":8080", nil)
+		}
+			
 	} else {
+		fmt.Print("Need to provide a NMAP xml output file. (i.e. -f <nmap_xml>)")
 		return
 	}
 }
