@@ -6,7 +6,7 @@
     <link rel="stylesheet" type="text/css" href="/css/host.css">
     <link rel="stylesheet" type="text/css" href="/css/search.css">
   </head>
-  <body>
+  <body onload="fetch_os_image();">
     <script src="/js/helper.js"></script>
     <div class=main_container>
       <div class=main_title>
@@ -42,7 +42,7 @@
   			<div class=ip_icon alt=Unknown>
   			</div>
   			<div class=ip_info>
-  				<span class=ip_info_addr>{{.Address.Addr}}</span>
+  				<span class=ip_info_addr>{{.Address.Addr}}</span> 
   				<br>
   				<span class=ip_info_os>{{range .HostNames}}{{.Name}},{{end}}</span>
   			</div>
@@ -149,18 +149,18 @@
 		      	</tr>
 		  	  	{{range .OS.OSMatches}}
 		  	  	<tr class=ip_row>
-		  				<td>{{.Name}}</td>
-		  				<td>{{.Accuracy}}</td>
-		  				<td>{{.Line}}</td>
-		  				<td>{{range .OSClasses}} {{.Type}}</br>{{end}}</td>
-		  				<td>{{range .OSClasses}} {{.Vendor}}</br>{{end}}</td>
-		  				<td>{{range .OSClasses}} {{.OSFamily}}</br>{{end}}</td>
-		  				<td>{{range .OSClasses}} {{.OSGen}}</br>{{end}}</td>
-		  				<td>{{range .OSClasses}} {{.Accuracy}}</br>{{end}}</td>
-		  				<td>{{range .OSClasses}} {{range .CPEs}} {{.Value}}</br>{{end}}</td>
+		  			<td>{{.Name}}</td>
+		  			<td>{{.Accuracy}}</td>
+		  			<td>{{.Line}}</td>
+		  			<td>{{range .OSClasses}} {{.Type}}</br>{{end}}</td>
+		  			<td>{{range .OSClasses}} {{.Vendor}}</br>{{end}}</td>
+		  			<td>{{range .OSClasses}} {{.OSFamily}}</br>{{end}}</td>
+		  			<td>{{range .OSClasses}} {{.OSGen}}</br>{{end}}</td>
+		  			<td>{{range .OSClasses}} {{.Accuracy}}</br>{{end}}</td>
+		  			<td>{{range .OSClasses}} {{range .CPEs}} {{.Value}}</br>{{end}}</td>
 							{{end}}
-		  			</tr>
-		  			{{end}}
+		  		</tr>
+		  		{{end}}
 		  		</table>
 				</div>
 				<div class=title_menu><span class=title>Traceroute</span></div>
@@ -226,7 +226,7 @@
 	    		</script>
 					<center><span>Note: The higher the link width the higher the RTT.</span></center>
 								</br>
-				<a class="iplink" href="javascript:history.back();"><< BACK</a>
+				<a class="iplink" href="javascript:history.back();">← BACK</a>
 				</div>
 			</div>
   	</div>
