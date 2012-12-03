@@ -29,18 +29,19 @@ function fetch_os_image() {
 	var os_name = os[os.length-1].getElementsByTagName("tr")[1].getElementsByTagName("td")[0].textContent;
 	if (os_name.indexOf("Linux") != -1) {
 		document.getElementsByClassName("ip_icon")[0].attributes[1].value = "Linux";
-		return 
+		return 0;
 	}
 	if (os_name.indexOf("Window") != -1) {
 		document.getElementsByClassName("ip_icon")[0].attributes[1].value = "Windows";
-		return 
+		return 0;
 	}
 	if (os_name.indexOf("Cisco") != -1) {
 		document.getElementsByClassName("ip_icon")[0].attributes[1].value = "Cisco";
-		return 
+		return 0;
 	}
 	if (os_name.indexOf("Linksys") != -1) {
 		document.getElementsByClassName("ip_icon")[0].attributes[1].value = "Linksys";
-		return 
+		return 0;
 	}
+	return -1;
 }

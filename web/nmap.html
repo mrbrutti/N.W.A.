@@ -49,7 +49,7 @@
 	       {{range .}}
 	       {{ if .OpenPorts}}
 	      	<tr class=ip_row>
-						<td><a class="iplink" href="/ip/{{.Address.Addr}}">{{.Address.Addr}}</a></td>
+            <td><a class="iplink" href="/ip/{{.Address.Addr}}">{{.Address.Addr}}</a></td>
 						<td>{{.OSGuess}}</td>
 						<td>					
 							{{range .OpenPorts}}
