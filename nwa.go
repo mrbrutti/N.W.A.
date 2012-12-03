@@ -78,18 +78,21 @@ func nmapResults(rw http.ResponseWriter, req *http.Request) {
 	t.ParseFiles("web/nmap.html")
 	hosts := v.Alive()
 	maxsize := len(hosts)
-
-	start, err := strconv.Atoi(req.FormValue("start"))
-	if err != nil {
-		t.Execute(rw, hosts[0:49])
+	if maxsize < 50 {
+			t.Execute(rw, hosts)
 	} else {
-		if start <= maxsize-50 {
-			t.Execute(rw, hosts[start:start+49])
+		start, err := strconv.Atoi(req.FormValue("start"))
+		if err != nil {
+			t.Execute(rw, hosts[0:49])
 		} else {
-			if start < maxsize {
-				t.Execute(rw, hosts[start:maxsize])
+			if start <= maxsize-50 {
+				t.Execute(rw, hosts[start:start+49])
 			} else {
-				t.Execute(rw, hosts[maxsize-50:maxsize])
+				if start < maxsize {
+					t.Execute(rw, hosts[start:maxsize])
+				} else {
+					t.Execute(rw, hosts[maxsize-50:maxsize])
+				}
 			}
 		}
 	}
