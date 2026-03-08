@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="N.W.A. icon">
+  <rect width="128" height="128" rx="28" fill="#17130f"/>
+  <circle cx="64" cy="64" r="36" fill="none" stroke="#ece2cd" stroke-width="5" opacity="0.6"/>
+  <circle cx="64" cy="64" r="20" fill="none" stroke="#2f8e71" stroke-width="6"/>
+  <path d="M64 16v48l34 18" fill="none" stroke="#cb6139" stroke-linecap="round" stroke-linejoin="round" stroke-width="8"/>
+  <circle cx="64" cy="64" r="8" fill="#ece2cd"/>
+</svg>

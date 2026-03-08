@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>N.W.A. | Analyst-first Nmap workspace</title>
+  <meta
+    name="description"
+    content="N.W.A. turns Nmap XML into an analyst workspace with dense host review, route graphs, diffs, saved views, annotations, and managed enrichment jobs."
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&amp;family=Rajdhani:wght@400;500;600;700&amp;display=swap"
+    rel="stylesheet"
+  >
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="N.W.A. home">
+        <span class="brand-mark">N.W.A.</span>
+        <span class="brand-copy">Nmap analyst workbench</span>
+      </a>
+
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#capabilities">Capabilities</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#runbook">Runbook</a>
+      </nav>
+
+      <a
+        class="repo-link"
+        href="https://github.com/FreedomCoder/N.W.A."
+        target="_blank"
+        rel="noreferrer"
+      >
+        View source
+      </a>
+    </header>
+
+    <main>
+      <section class="hero reveal" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">GitHub Pages companion site</p>
+          <h1>Scan once. Revisit the whole story.</h1>
+          <p class="lede">
+            N.W.A. turns raw Nmap XML into an analyst workspace with inventory review,
+            checkpoint diffs, traceroute topology, host annotations, and queued
+            enrichment jobs that keep feeding the same working set.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button--solid" href="#workflow">Run it locally</a>
+            <a
+              class="button button--ghost"
+              href="https://github.com/FreedomCoder/N.W.A."
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open repository
+            </a>
+          </div>
+
+          <ul class="signal-strip" aria-label="Highlights">
+            <li>Import XML snapshots and keep them in one workspace.</li>
+            <li>Replay scan history as concrete host, port, finding, and route diffs.</li>
+            <li>Launch managed <code>nmap</code> and <code>nuclei</code> jobs in the background.</li>
+          </ul>
+        </div>
+
+        <div class="hero-board" aria-hidden="true">
+          <div class="board-frame">
+            <div class="board-header">
+              <span>Workspace signal</span>
+              <span class="status-pill">analyst mode</span>
+            </div>
+
+            <div class="board-grid">
+              <article class="board-card board-card--wide">
+                <p class="board-kicker">Executive summary</p>
+                <h2>14 live hosts. 4 elevated exposure. HTTP and SSH dominate the map.</h2>
+                <p>
+                  Pull imported scans, enrichment runs, and findings back into one review
+                  surface instead of hopping across files and ad hoc notes.
+                </p>
+              </article>
+
+              <article class="board-card">
+                <p class="board-kicker">Changes</p>
+                <ul>
+                  <li>+3 opened ports</li>
+                  <li>+1 high finding</li>
+                  <li>+2 new traceroutes</li>
+                </ul>
+              </article>
+
+              <article class="board-card">
+                <p class="board-kicker">Plugins</p>
+                <ul>
+                  <li>Nmap Deep Enrichment</li>
+                  <li>Nuclei HTTP Enrichment</li>
+                </ul>
+              </article>
+
+              <article class="board-card board-card--graph">
+                <p class="board-kicker">Topology</p>
+                <div class="route-lines">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <p class="board-note">Trace nodes, route depth, and likely transit choke points.</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics reveal" aria-label="Project metrics">
+        <article class="metric">
+          <span class="metric-value" data-count="4">0</span>
+          <span class="metric-label">core views</span>
+        </article>
+        <article class="metric">
+          <span class="metric-value" data-count="2">0</span>
+          <span class="metric-label">managed plugins</span>
+        </article>
+        <article class="metric">
+          <span class="metric-value" data-count="3">0</span>
+          <span class="metric-label">export formats</span>
+        </article>
+        <article class="metric">
+          <span class="metric-value" data-count="4">0</span>
+          <span class="metric-label">JSON feeds</span>
+        </article>
+      </section>
+
+      <section class="section section--capabilities reveal" id="capabilities">
+        <div class="section-heading">
+          <p class="eyebrow">What the tool covers</p>
+          <h2>Built for analysts who need continuity, not another one-shot scanner shell.</h2>
+        </div>
+
+        <div class="capability-layout">
+          <article class="capability capability--hero">
+            <p class="capability-tag">Inventory review</p>
+            <h3>Dense host detail without losing the workspace view.</h3>
+            <p>
+              Review ports, banners, scripts, fingerprints, OS guesses, traceroute, tags,
+              notes, and recent job history per host while keeping filters and saved views
+              close at hand.
+            </p>
+          </article>
+
+          <article class="capability">
+            <p class="capability-tag">Diff playback</p>
+            <h3>Compare checkpoints instead of eyeballing XML deltas.</h3>
+            <p>
+              N.W.A. promotes imported scans and plugin results into replayable checkpoints,
+              then breaks changes down into added hosts, opened ports, service shifts,
+              findings, and route movement.
+            </p>
+          </article>
+
+          <article class="capability">
+            <p class="capability-tag">Route graph</p>
+            <h3>Traceroute data becomes topology you can actually scan.</h3>
+            <p>
+              Aggregate paths into a route graph, surface recurring transit nodes, and export
+              the structure for notebooks or downstream tooling.
+            </p>
+          </article>
+
+          <article class="capability">
+            <p class="capability-tag">Background jobs</p>
+            <h3>Queue follow-up work inside the same workspace.</h3>
+            <p>
+              Launch managed <code>nmap</code> deep enrichment or <code>nuclei</code> HTTP
+              enrichment runs. Artifacts, summaries, and imported results stay tied to the
+              workspace instead of leaking into side directories.
+            </p>
+          </article>
+
+          <article class="capability capability--accent">
+            <p class="capability-tag">Exports and APIs</p>
+            <h3>Ship the current state out when you need automation.</h3>
+            <p>
+              Export inventory as <code>hosts.txt</code>, <code>hosts.csv</code>, or
+              <code>nuclei-targets.txt</code>. Pull machine-friendly views from
+              <code>/api/diff</code>, <code>/api/graph</code>, <code>/api/observations</code>,
+              and per-host trace JSON.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section section--workflow reveal" id="workflow">
+        <div class="section-heading">
+          <p class="eyebrow">Analyst loop</p>
+          <h2>Use GitHub Pages for the landing page. Run the actual workbench locally.</h2>
+        </div>
+
+        <ol class="workflow-rail">
+          <li>
+            <span class="workflow-step">01</span>
+            <div>
+              <h3>Seed the workspace</h3>
+              <p>Start from an existing Nmap XML file or boot an empty workspace and import later.</p>
+            </div>
+          </li>
+          <li>
+            <span class="workflow-step">02</span>
+            <div>
+              <h3>Review the map</h3>
+              <p>Filter hosts, inspect exposure, check topology, and save views for recurring slices.</p>
+            </div>
+          </li>
+          <li>
+            <span class="workflow-step">03</span>
+            <div>
+              <h3>Enrich in place</h3>
+              <p>Queue deep <code>nmap</code> or <code>nuclei</code> jobs and let the workspace absorb the results.</p>
+            </div>
+          </li>
+          <li>
+            <span class="workflow-step">04</span>
+            <div>
+              <h3>Replay the delta</h3>
+              <p>Compare checkpoints, annotate what changed, and export the current state for downstream use.</p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="command-deck">
+          <article class="command-panel">
+            <p class="command-label">Quick start</p>
+            <pre><code>go run . -f ./scan.xml -p 8080</code></pre>
+            <p class="command-note">Seeds the workspace from one XML file and hosts the UI at <code>http://localhost:8080</code>.</p>
+          </article>
+
+          <article class="command-panel">
+            <p class="command-label">Reusable workspace</p>
+            <pre><code>go run . -w .nwa-workspace -p 8080</code></pre>
+            <p class="command-note">Starts an empty or existing workspace directory so imports, jobs, artifacts, and analyst notes persist.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section section--runbook reveal" id="runbook">
+        <div class="runbook-card">
+          <p class="eyebrow">Operational notes</p>
+          <h2>What GitHub Pages is doing here</h2>
+          <p>
+            This site is a static project front door: feature overview, runbook, and repo link.
+            The Go application itself still runs locally because the live workspace needs a server,
+            filesystem state, and optional local binaries.
+          </p>
+        </div>
+
+        <div class="runbook-grid">
+          <article class="runbook-panel">
+            <p class="runbook-tag">Optional local tools</p>
+            <ul>
+              <li><code>nmap</code> for deep enrichment jobs that re-import XML into the workspace</li>
+              <li><code>nuclei</code> for HTTP enrichment jobs and per-host findings</li>
+              <li>Any browser for the local UI at <code>localhost</code></li>
+            </ul>
+          </article>
+
+          <article class="runbook-panel">
+            <p class="runbook-tag">Useful routes</p>
+            <ul>
+              <li><code>/</code> dashboard and dense host review</li>
+              <li><code>/changes</code> replayable workspace diffs</li>
+              <li><code>/graph</code> aggregated traceroute topology</li>
+              <li><code>/scans</code> imports, plugin queue, and recent workspace events</li>
+            </ul>
+          </article>
+
+          <article class="runbook-panel">
+            <p class="runbook-tag">Machine-friendly outputs</p>
+            <ul>
+              <li><code>/exports/hosts.csv</code> workspace inventory</li>
+              <li><code>/exports/nuclei.txt</code> inferred HTTP targets</li>
+              <li><code>/api/diff</code> and <code>/api/graph</code> for downstream tooling</li>
+              <li><code>/api/observations</code> and <code>/json/&lt;ip&gt;</code> for analyst context</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Static Pages site for N.W.A. The live analyst workspace runs locally.</p>
+      <p>
+        <a href="https://github.com/FreedomCoder/N.W.A." target="_blank" rel="noreferrer">FreedomCoder/N.W.A.</a>
+        <span class="footer-divider">•</span>
+        <span id="current-year"></span>
+      </p>
+    </footer>
+  </div>
+</body>
+</html>
