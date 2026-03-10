@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "reactflow/dist/style.css";
 
 import { AppRouter } from "./router";
 import "./styles.css";

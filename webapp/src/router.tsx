@@ -21,6 +21,7 @@ import {
   type FormEvent,
   type ReactNode,
   Suspense,
+  lazy,
   startTransition,
   useDeferredValue,
   useEffect,
@@ -52,6 +53,7 @@ import {
   engagementSettingsQuery,
   engagementSourcesQuery,
   engagementSummaryQuery,
+  engagementTopologyQuery,
   engagementZonesQuery,
   engagementsQuery,
   importEngagementSource,
@@ -66,10 +68,22 @@ import {
   type PlatformPagination,
   type PlatformPort,
   type SessionPayload,
+  type OrchestrationPolicy,
+  type OrchestrationStep,
   requestEngagementRecommendations,
   runEngagementCampaignAction,
   updateToolCommandTemplate,
 } from "./api";
+
+const PolicyFlowCanvas = lazy(async () => {
+  const module = await import("./flowViews");
+  return { default: module.PolicyFlowCanvas };
+});
+
+const TopologyFlowCanvas = lazy(async () => {
+  const module = await import("./flowViews");
+  return { default: module.TopologyFlowCanvas };
+});
 
 type RouterContext = {
   queryClient: QueryClient;
@@ -246,6 +260,47 @@ function singlePageSearchState(
   return {
     page: next.page ?? current.page,
     pageSize: next.pageSize ?? current.pageSize,
+  };
+}
+
+function campaignsSearchState(
+  current: {
+    page: number;
+    pageSize: number;
+    policyId: string;
+  },
+  next: Partial<{
+    page: number;
+    pageSize: number;
+    policyId: string;
+  }>,
+) {
+  return {
+    page: next.page ?? current.page,
+    pageSize: next.pageSize ?? current.pageSize,
+    policyId: next.policyId ?? current.policyId,
+  };
+}
+
+function topologySearchState(
+  current: {
+    focusRouteId: string;
+    minEdgeCount: number;
+    role: string;
+    selectedNode: string;
+  },
+  next: Partial<{
+    focusRouteId: string;
+    minEdgeCount: number;
+    role: string;
+    selectedNode: string;
+  }>,
+) {
+  return {
+    focusRouteId: next.focusRouteId ?? current.focusRouteId,
+    minEdgeCount: next.minEdgeCount ?? current.minEdgeCount,
+    role: next.role ?? current.role,
+    selectedNode: next.selectedNode ?? current.selectedNode,
   };
 }
 
@@ -463,8 +518,21 @@ const engagementCampaignsRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => ({
     page: readInt(search.page, 1),
     pageSize: readPageSize(search.pageSize),
+    policyId: readString(search.policyId),
   }),
   component: EngagementCampaignsPage,
+});
+
+const engagementTopologyRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/topology",
+  validateSearch: (search: Record<string, unknown>) => ({
+    focusRouteId: readString(search.focusRouteId),
+    minEdgeCount: readInt(search.minEdgeCount, 1),
+    role: readString(search.role, "all"),
+    selectedNode: readString(search.selectedNode),
+  }),
+  component: EngagementTopologyPage,
 });
 
 const engagementRecommendationsRoute = createRoute({
@@ -511,6 +579,7 @@ const routeTree = rootRoute.addChildren([
     engagementFindingDetailRoute,
     engagementSourcesRoute,
     engagementCampaignsRoute,
+    engagementTopologyRoute,
     engagementRecommendationsRoute,
     engagementSettingsRoute,
   ]),
@@ -1214,6 +1283,12 @@ function EngagementLayout() {
               className={pathname.startsWith(`/engagements/${engagement.slug}/campaigns`) ? "is-active" : ""}
             >
               Campaigns
+            </a>
+            <a
+              href={`/app/engagements/${engagement.slug}/topology`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/topology`) ? "is-active" : ""}
+            >
+              Topology
             </a>
             <a
               href={`/app/engagements/${engagement.slug}/recommendations`}
@@ -2260,6 +2335,61 @@ function EngagementSourcesPage() {
   );
 }
 
+type PolicyStepDraft = {
+  label: string;
+  trigger: string;
+  pluginId: string;
+  stage: string;
+  targetSource: string;
+  matchKinds: string;
+  whenPlugin: string;
+  whenProfile: string;
+  summary: string;
+  profile: string;
+  ports: string;
+  topPorts: string;
+  enabled: boolean;
+};
+
+function emptyPolicyStepDraft(): PolicyStepDraft {
+  return {
+    label: "",
+    trigger: "kickoff",
+    pluginId: "nmap-enrich",
+    stage: "discovery",
+    targetSource: "chunk-values",
+    matchKinds: "ip,cidr,hostname",
+    whenPlugin: "",
+    whenProfile: "",
+    summary: "",
+    profile: "",
+    ports: "",
+    topPorts: "",
+    enabled: true,
+  };
+}
+
+function policyStepDraftFromStep(step: OrchestrationStep | null | undefined): PolicyStepDraft {
+  if (!step) {
+    return emptyPolicyStepDraft();
+  }
+  return {
+    label: step.label,
+    trigger: step.trigger,
+    pluginId: step.pluginId,
+    stage: step.stage,
+    targetSource: step.targetSource,
+    matchKinds: step.matchKinds.join(","),
+    whenPlugin: step.whenPlugin,
+    whenProfile: step.whenProfile,
+    summary: step.summary,
+    profile: step.options.profile || "",
+    ports: step.options.ports || "",
+    topPorts: step.options.top_ports || "",
+    enabled: step.enabled,
+  };
+}
+
 function EngagementCampaignsPage() {
   const { slug } = engagementRoute.useParams();
   const search = engagementCampaignsRoute.useSearch();
@@ -2268,6 +2398,11 @@ function EngagementCampaignsPage() {
   const [targetMode, setTargetMode] = useState("profile");
   const [targets, setTargets] = useState("");
   const [profileScope, setProfileScope] = useState("all-hosts");
+  const [policyName, setPolicyName] = useState("");
+  const [policyDescription, setPolicyDescription] = useState("");
+  const [selectedStepId, setSelectedStepId] = useState("");
+  const [newStepDraft, setNewStepDraft] = useState<PolicyStepDraft>(emptyPolicyStepDraft);
+  const [stepDraft, setStepDraft] = useState<PolicyStepDraft>(emptyPolicyStepDraft);
   const campaigns = useSuspenseQuery(
     engagementCampaignsQuery(slug, {
       page: search.page,
@@ -2294,6 +2429,39 @@ function EngagementCampaignsPage() {
       ]);
     },
   });
+
+  const selectedPolicy = useMemo<OrchestrationPolicy | null>(() => {
+    const explicit = campaigns.data.policies.find((policy) => policy.id === search.policyId);
+    if (explicit) {
+      return explicit;
+    }
+    return campaigns.data.policies.find((policy) => policy.active) || campaigns.data.policies[0] || null;
+  }, [campaigns.data.policies, search.policyId]);
+
+  const selectedStep = useMemo<OrchestrationStep | null>(() => {
+    if (!selectedPolicy) {
+      return null;
+    }
+    return selectedPolicy.steps.find((step) => step.id === selectedStepId) || selectedPolicy.steps[0] || null;
+  }, [selectedPolicy, selectedStepId]);
+
+  useEffect(() => {
+    if (!selectedPolicy) {
+      setPolicyName("");
+      setPolicyDescription("");
+      setSelectedStepId("");
+      return;
+    }
+    setPolicyName(selectedPolicy.name);
+    setPolicyDescription(selectedPolicy.description);
+    if (!selectedStepId || !selectedPolicy.steps.some((step) => step.id === selectedStepId)) {
+      setSelectedStepId(selectedPolicy.steps[0]?.id || "");
+    }
+  }, [selectedPolicy, selectedStepId]);
+
+  useEffect(() => {
+    setStepDraft(policyStepDraftFromStep(selectedStep));
+  }, [selectedStep]);
 
   return (
     <div className="cc-stack">
@@ -2398,19 +2566,110 @@ function EngagementCampaignsPage() {
 
       <div className="cc-grid cc-grid--two">
         <Panel title="Policies" meta={`${campaigns.data.policies.length} orchestration policies`}>
-          <List
-            items={campaigns.data.policies.map((policy) => ({
-              key: policy.id,
-              label: policy.name,
-              detail: `${policy.steps.length} steps · ${policy.active ? "active" : "inactive"}`,
-              onClick: () =>
-                mutation.mutate({
-                  action: "activate_policy",
-                  policyId: policy.id,
-                }),
-            }))}
-            empty="No orchestration policies defined."
-          />
+          <div className="cc-stack">
+            <List
+              items={campaigns.data.policies.map((policy) => ({
+                key: policy.id,
+                label: policy.name,
+                detail: `${policy.steps.length} steps · ${policy.active ? "active" : "inactive"}`,
+                active: selectedPolicy?.id === policy.id,
+                onClick: () => {
+                  startTransition(() => {
+                    void navigate({
+                      to: "/engagements/$slug/campaigns",
+                      params: { slug },
+                      search: () => campaignsSearchState(search, { policyId: policy.id }),
+                      replace: true,
+                    });
+                  });
+                },
+              }))}
+              empty="No orchestration policies defined."
+            />
+
+            <form
+              className="cc-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                mutation.mutate(
+                  {
+                    action: "create_policy",
+                    policyName,
+                    policyDescription,
+                  },
+                  {
+                    onSuccess: async () => {
+                      startTransition(() => {
+                        void navigate({
+                          to: "/engagements/$slug/campaigns",
+                          params: { slug },
+                          search: () => campaignsSearchState(search, { policyId: "", page: 1 }),
+                          replace: true,
+                        });
+                      });
+                    },
+                  },
+                );
+              }}
+            >
+              <label className="cc-field">
+                <span>Policy name</span>
+                <input value={policyName} onChange={(event) => setPolicyName(event.target.value)} />
+              </label>
+              <label className="cc-field">
+                <span>Description</span>
+                <textarea
+                  rows={3}
+                  value={policyDescription}
+                  onChange={(event) => setPolicyDescription(event.target.value)}
+                />
+              </label>
+              <div className="cc-button-row">
+                <button className="cc-button cc-button--primary" disabled={mutation.isPending || !policyName.trim()} type="submit">
+                  Create policy
+                </button>
+                <button className="cc-button" disabled={mutation.isPending || !selectedPolicy} type="button" onClick={() => selectedPolicy && mutation.mutate({ action: "update_policy", policyId: selectedPolicy.id, policyName, policyDescription })}>
+                  Save policy
+                </button>
+                <button
+                  className="cc-button"
+                  disabled={mutation.isPending || !selectedPolicy}
+                  type="button"
+                  onClick={() => selectedPolicy && mutation.mutate({ action: "activate_policy", policyId: selectedPolicy.id })}
+                >
+                  Activate
+                </button>
+                <button
+                  className="cc-button"
+                  disabled={mutation.isPending || !selectedPolicy || campaigns.data.policies.length <= 1}
+                  type="button"
+                  onClick={() =>
+                    selectedPolicy &&
+                    mutation.mutate(
+                      {
+                        action: "delete_policy",
+                        policyId: selectedPolicy.id,
+                      },
+                      {
+                        onSuccess: async () => {
+                          startTransition(() => {
+                            void navigate({
+                              to: "/engagements/$slug/campaigns",
+                              params: { slug },
+                              search: () => campaignsSearchState(search, { policyId: "", page: 1 }),
+                              replace: true,
+                            });
+                          });
+                        },
+                      },
+                    )
+                  }
+                >
+                  Delete
+                </button>
+              </div>
+            </form>
+          </div>
         </Panel>
 
         <Panel title="Tool readiness" meta={`${campaigns.data.readiness.length} readiness groups`}>
@@ -2423,6 +2682,219 @@ function EngagementCampaignsPage() {
             empty="No readiness data available."
           />
         </Panel>
+      </div>
+
+      <div className="cc-grid cc-grid--flow">
+        <Panel title="Policy graph" meta={selectedPolicy ? `${selectedPolicy.steps.length} steps in ${selectedPolicy.name}` : "No policy selected"}>
+          {selectedPolicy ? (
+            <Suspense fallback={<InlineState tone="muted" title="Loading policy graph" body="Preparing the orchestration canvas." />}>
+              <PolicyFlowCanvas
+                onReorder={(stepOrder) =>
+                  mutation.mutate({
+                    action: "reorder_policy",
+                    policyId: selectedPolicy.id,
+                    stepOrder,
+                  })
+                }
+                onSelectStep={setSelectedStepId}
+                policy={selectedPolicy}
+                selectedStepId={selectedStep?.id || ""}
+              />
+            </Suspense>
+          ) : (
+            <InlineState tone="muted" title="No policy selected" body="Create or choose an orchestration policy to start building flow steps." />
+          )}
+        </Panel>
+
+        <div className="cc-stack">
+          <Panel title="Selected step" meta={selectedStep ? selectedStep.label : "Choose a step node"}>
+            {selectedPolicy && selectedStep ? (
+              <form
+                className="cc-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  mutation.mutate({
+                    action: "update_policy_step",
+                    policyId: selectedPolicy.id,
+                    stepId: selectedStep.id,
+                    label: stepDraft.label,
+                    trigger: stepDraft.trigger,
+                    pluginId: stepDraft.pluginId,
+                    stage: stepDraft.stage,
+                    targetSource: stepDraft.targetSource,
+                    matchKinds: stepDraft.matchKinds.split(",").map((value) => value.trim()).filter(Boolean),
+                    whenPlugin: stepDraft.whenPlugin,
+                    whenProfile: stepDraft.whenProfile,
+                    summary: stepDraft.summary,
+                    profile: stepDraft.profile,
+                    ports: stepDraft.ports,
+                    topPorts: stepDraft.topPorts,
+                    enabled: stepDraft.enabled,
+                  });
+                }}
+              >
+                <label className="cc-field">
+                  <span>Label</span>
+                  <input value={stepDraft.label} onChange={(event) => setStepDraft((current) => ({ ...current, label: event.target.value }))} />
+                </label>
+                <div className="cc-grid cc-grid--two">
+                  <label className="cc-field">
+                    <span>Tool</span>
+                    <select value={stepDraft.pluginId} onChange={(event) => setStepDraft((current) => ({ ...current, pluginId: event.target.value }))}>
+                      {campaigns.data.tools.items.map((tool) => (
+                        <option key={tool.id} value={tool.id}>
+                          {tool.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="cc-field">
+                    <span>Stage</span>
+                    <input value={stepDraft.stage} onChange={(event) => setStepDraft((current) => ({ ...current, stage: event.target.value }))} />
+                  </label>
+                </div>
+                <div className="cc-grid cc-grid--two">
+                  <label className="cc-field">
+                    <span>Trigger</span>
+                    <select value={stepDraft.trigger} onChange={(event) => setStepDraft((current) => ({ ...current, trigger: event.target.value }))}>
+                      <option value="kickoff">Kickoff</option>
+                      <option value="after-job">After job</option>
+                    </select>
+                  </label>
+                  <label className="cc-field">
+                    <span>Target source</span>
+                    <select value={stepDraft.targetSource} onChange={(event) => setStepDraft((current) => ({ ...current, targetSource: event.target.value }))}>
+                      <option value="chunk-values">Chunk values</option>
+                      <option value="live-hosts">Live hosts</option>
+                      <option value="derived-targets">Derived targets</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="cc-field">
+                  <span>Match kinds</span>
+                  <input value={stepDraft.matchKinds} onChange={(event) => setStepDraft((current) => ({ ...current, matchKinds: event.target.value }))} />
+                </label>
+                <div className="cc-grid cc-grid--two">
+                  <label className="cc-field">
+                    <span>When plugin</span>
+                    <input value={stepDraft.whenPlugin} onChange={(event) => setStepDraft((current) => ({ ...current, whenPlugin: event.target.value }))} />
+                  </label>
+                  <label className="cc-field">
+                    <span>When profile</span>
+                    <input value={stepDraft.whenProfile} onChange={(event) => setStepDraft((current) => ({ ...current, whenProfile: event.target.value }))} />
+                  </label>
+                </div>
+                <div className="cc-grid cc-grid--two">
+                  <label className="cc-field">
+                    <span>Profile</span>
+                    <input value={stepDraft.profile} onChange={(event) => setStepDraft((current) => ({ ...current, profile: event.target.value }))} />
+                  </label>
+                  <label className="cc-field">
+                    <span>Ports</span>
+                    <input value={stepDraft.ports} onChange={(event) => setStepDraft((current) => ({ ...current, ports: event.target.value }))} />
+                  </label>
+                </div>
+                <label className="cc-field">
+                  <span>Summary</span>
+                  <textarea rows={3} value={stepDraft.summary} onChange={(event) => setStepDraft((current) => ({ ...current, summary: event.target.value }))} />
+                </label>
+                <label className="cc-checkbox">
+                  <input checked={stepDraft.enabled} onChange={(event) => setStepDraft((current) => ({ ...current, enabled: event.target.checked }))} type="checkbox" />
+                  <span>Step enabled</span>
+                </label>
+                <div className="cc-button-row">
+                  <button className="cc-button cc-button--primary" disabled={mutation.isPending} type="submit">
+                    Save step
+                  </button>
+                  <button
+                    className="cc-button"
+                    disabled={mutation.isPending}
+                    type="button"
+                    onClick={() => {
+                      setSelectedStepId("");
+                      mutation.mutate({ action: "remove_policy_step", policyId: selectedPolicy.id, stepId: selectedStep.id });
+                    }}
+                  >
+                    Remove step
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <InlineState tone="muted" title="No step selected" body="Select a node in the policy graph to edit the step definition." />
+            )}
+          </Panel>
+
+          <Panel title="Add policy step" meta={selectedPolicy ? selectedPolicy.name : "Choose a policy"}>
+            {selectedPolicy ? (
+              <form
+                className="cc-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  mutation.mutate({
+                    action: "add_policy_step",
+                    policyId: selectedPolicy.id,
+                    label: newStepDraft.label,
+                    trigger: newStepDraft.trigger,
+                    pluginId: newStepDraft.pluginId,
+                    stage: newStepDraft.stage,
+                    targetSource: newStepDraft.targetSource,
+                    matchKinds: newStepDraft.matchKinds.split(",").map((value) => value.trim()).filter(Boolean),
+                    whenPlugin: newStepDraft.whenPlugin,
+                    whenProfile: newStepDraft.whenProfile,
+                    summary: newStepDraft.summary,
+                    profile: newStepDraft.profile,
+                    ports: newStepDraft.ports,
+                    topPorts: newStepDraft.topPorts,
+                  });
+                  setNewStepDraft(emptyPolicyStepDraft);
+                }}
+              >
+                <label className="cc-field">
+                  <span>Label</span>
+                  <input value={newStepDraft.label} onChange={(event) => setNewStepDraft((current) => ({ ...current, label: event.target.value }))} />
+                </label>
+                <div className="cc-grid cc-grid--two">
+                  <label className="cc-field">
+                    <span>Tool</span>
+                    <select value={newStepDraft.pluginId} onChange={(event) => setNewStepDraft((current) => ({ ...current, pluginId: event.target.value }))}>
+                      {campaigns.data.tools.items.map((tool) => (
+                        <option key={tool.id} value={tool.id}>
+                          {tool.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="cc-field">
+                    <span>Trigger</span>
+                    <select value={newStepDraft.trigger} onChange={(event) => setNewStepDraft((current) => ({ ...current, trigger: event.target.value }))}>
+                      <option value="kickoff">Kickoff</option>
+                      <option value="after-job">After job</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="cc-grid cc-grid--two">
+                  <label className="cc-field">
+                    <span>Stage</span>
+                    <input value={newStepDraft.stage} onChange={(event) => setNewStepDraft((current) => ({ ...current, stage: event.target.value }))} />
+                  </label>
+                  <label className="cc-field">
+                    <span>Target source</span>
+                    <select value={newStepDraft.targetSource} onChange={(event) => setNewStepDraft((current) => ({ ...current, targetSource: event.target.value }))}>
+                      <option value="chunk-values">Chunk values</option>
+                      <option value="live-hosts">Live hosts</option>
+                      <option value="derived-targets">Derived targets</option>
+                    </select>
+                  </label>
+                </div>
+                <button className="cc-button cc-button--primary" disabled={mutation.isPending} type="submit">
+                  Add step
+                </button>
+              </form>
+            ) : (
+              <InlineState tone="muted" title="No active policy" body="Create or select a policy before adding steps." />
+            )}
+          </Panel>
+        </div>
       </div>
 
       <div className="cc-grid cc-grid--two">
@@ -2443,7 +2915,7 @@ function EngagementCampaignsPage() {
                 void navigate({
                   to: "/engagements/$slug/campaigns",
                   params: { slug },
-                  search: () => singlePageSearchState(search, { page }),
+                  search: () => campaignsSearchState(search, { page }),
                   replace: true,
                 });
               });
@@ -2453,7 +2925,7 @@ function EngagementCampaignsPage() {
                 void navigate({
                   to: "/engagements/$slug/campaigns",
                   params: { slug },
-                  search: () => singlePageSearchState(search, { page: 1, pageSize }),
+                  search: () => campaignsSearchState(search, { page: 1, pageSize }),
                   replace: true,
                 });
               });
@@ -2484,6 +2956,187 @@ function EngagementCampaignsPage() {
             empty="No execution chunks staged yet."
           />
         </Panel>
+      </div>
+    </div>
+  );
+}
+
+function EngagementTopologyPage() {
+  const { slug } = engagementRoute.useParams();
+  const search = engagementTopologyRoute.useSearch();
+  const navigate = useNavigate();
+  const topology = useSuspenseQuery(engagementTopologyQuery(slug));
+
+  const selectedNode = useMemo(
+    () => topology.data.nodes.find((node) => node.id === search.selectedNode) || null,
+    [search.selectedNode, topology.data.nodes],
+  );
+  const selectedRoute = useMemo(
+    () => topology.data.routes.find((route) => route.id === search.focusRouteId) || null,
+    [search.focusRouteId, topology.data.routes],
+  );
+  const leadingNodes = useMemo(
+    () => topology.data.nodes.slice().sort((left, right) => right.count - left.count || left.label.localeCompare(right.label)).slice(0, 12),
+    [topology.data.nodes],
+  );
+
+  return (
+    <div className="cc-stack">
+      <StatGrid
+        items={[
+          { label: "Traced hosts", value: topology.data.summary.traced_hosts.toString(), detail: "Targets with route evidence" },
+          { label: "Nodes", value: topology.data.summary.nodes.toString(), detail: "Topology vertices in the workspace graph" },
+          { label: "Edges", value: topology.data.summary.edges.toString(), detail: "Observed path connections" },
+          { label: "Focus", value: selectedRoute?.target_label || "Backbone", detail: selectedRoute ? `${selectedRoute.depth} hops` : "All routes" },
+        ]}
+      />
+
+      <section className="cc-toolbar">
+        <label className="cc-field">
+          <span>Role filter</span>
+          <select
+            value={search.role}
+            onChange={(event) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/topology",
+                  params: { slug },
+                  search: () => topologySearchState(search, { role: event.target.value, selectedNode: "" }),
+                  replace: true,
+                });
+              });
+            }}
+          >
+            <option value="all">All nodes</option>
+            <option value="source">Source</option>
+            <option value="transit">Transit</option>
+            <option value="mixed">Mixed</option>
+            <option value="target">Target</option>
+          </select>
+        </label>
+        <label className="cc-field">
+          <span>Min edge weight</span>
+          <select
+            value={search.minEdgeCount}
+            onChange={(event) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/topology",
+                  params: { slug },
+                  search: () => topologySearchState(search, { minEdgeCount: Number.parseInt(event.target.value, 10), selectedNode: "" }),
+                  replace: true,
+                });
+              });
+            }}
+          >
+            {[1, 2, 3, 5, 10].map((value) => (
+              <option key={value} value={value}>
+                {value}+
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="cc-button"
+          type="button"
+          onClick={() => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/topology",
+                params: { slug },
+                search: () => topologySearchState(search, { focusRouteId: "", selectedNode: "" }),
+                replace: true,
+              });
+            });
+          }}
+        >
+          Clear focus
+        </button>
+      </section>
+
+      <div className="cc-grid cc-grid--flow">
+        <Panel title="Topology explorer" meta={selectedRoute ? selectedRoute.target_label : "Workspace backbone"}>
+          <Suspense fallback={<InlineState tone="muted" title="Loading topology graph" body="Preparing the route explorer canvas." />}>
+            <TopologyFlowCanvas
+              focusRouteId={search.focusRouteId}
+              minEdgeCount={search.minEdgeCount}
+              onSelectNode={(nodeId) => {
+                startTransition(() => {
+                  void navigate({
+                    to: "/engagements/$slug/topology",
+                    params: { slug },
+                    search: () => topologySearchState(search, { selectedNode: nodeId }),
+                    replace: true,
+                  });
+                });
+              }}
+              roleFilter={search.role}
+              selectedNodeId={search.selectedNode}
+              topology={topology.data}
+            />
+          </Suspense>
+        </Panel>
+
+        <div className="cc-stack">
+          <Panel title="Route focus" meta={`${topology.data.routes.length} traced routes`}>
+            <List
+              items={topology.data.routes.slice(0, 16).map((route) => ({
+                key: route.id,
+                label: route.target_label,
+                detail: `${route.count} observations · ${route.depth} hops`,
+                active: search.focusRouteId === route.id,
+                onClick: () => {
+                  startTransition(() => {
+                    void navigate({
+                      to: "/engagements/$slug/topology",
+                      params: { slug },
+                      search: () => topologySearchState(search, { focusRouteId: route.id, selectedNode: route.hops[0] || "" }),
+                      replace: true,
+                    });
+                  });
+                },
+              }))}
+              empty="No traced routes are available yet."
+            />
+          </Panel>
+
+          <Panel title="Selected node" meta={selectedNode ? selectedNode.role : "Choose a node"}>
+            {selectedNode ? (
+              <div className="cc-detail-grid">
+                <InfoPair label="Label" value={selectedNode.label} />
+                <InfoPair label="Role" value={selectedNode.role} />
+                <InfoPair label="Hostname" value={selectedNode.hostname || "No hostname"} />
+                <InfoPair label="Provider" value={selectedNode.provider || "No provider"} />
+                <InfoPair label="Average TTL" value={selectedNode.avg_ttl.toFixed(1)} />
+                <InfoPair label="Average RTT" value={`${selectedNode.avg_rtt.toFixed(1)} ms`} />
+              </div>
+            ) : (
+              <InlineState tone="muted" title="No node selected" body="Select a node in the topology graph to inspect its route context." />
+            )}
+          </Panel>
+
+          <Panel title="Leading transit nodes" meta="Highest-frequency infrastructure">
+            <List
+              items={leadingNodes.map((node) => ({
+                key: node.id,
+                label: node.label,
+                detail: `${node.count} observations · ${node.role}`,
+                active: search.selectedNode === node.id,
+                onClick: () => {
+                  startTransition(() => {
+                    void navigate({
+                      to: "/engagements/$slug/topology",
+                      params: { slug },
+                      search: () => topologySearchState(search, { selectedNode: node.id }),
+                      replace: true,
+                    });
+                  });
+                },
+              }))}
+              empty="No topology nodes available."
+            />
+          </Panel>
+        </div>
       </div>
     </div>
   );

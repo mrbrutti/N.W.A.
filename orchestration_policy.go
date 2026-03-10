@@ -52,17 +52,18 @@ type OrchestrationPolicyView struct {
 }
 
 type OrchestrationStepView struct {
-	ID           string   `json:"id"`
-	Label        string   `json:"label"`
-	Trigger      string   `json:"trigger"`
-	PluginID     string   `json:"pluginId"`
-	Stage        string   `json:"stage"`
-	TargetSource string   `json:"targetSource"`
-	MatchKinds   []string `json:"matchKinds"`
-	WhenPlugin   string   `json:"whenPlugin"`
-	WhenProfile  string   `json:"whenProfile"`
-	Summary      string   `json:"summary"`
-	Enabled      bool     `json:"enabled"`
+	ID           string            `json:"id"`
+	Label        string            `json:"label"`
+	Trigger      string            `json:"trigger"`
+	PluginID     string            `json:"pluginId"`
+	Stage        string            `json:"stage"`
+	TargetSource string            `json:"targetSource"`
+	MatchKinds   []string          `json:"matchKinds"`
+	WhenPlugin   string            `json:"whenPlugin"`
+	WhenProfile  string            `json:"whenProfile"`
+	Summary      string            `json:"summary"`
+	Options      map[string]string `json:"options"`
+	Enabled      bool              `json:"enabled"`
 }
 
 func defaultOrchestrationPolicies() []orchestrationPolicyRecord {
@@ -217,9 +218,6 @@ func normalizePolicies(preferences workspacePreferences) workspacePreferences {
 			step.Trigger = normalizePolicyTrigger(step.Trigger)
 			step.TargetSource = normalizePolicyTargetSource(step.TargetSource)
 			step.MatchKinds = normalizePolicyKinds(step.MatchKinds)
-			if !step.Enabled {
-				step.Enabled = step.Enabled || step.Trigger != ""
-			}
 		}
 	}
 
@@ -331,6 +329,7 @@ func (w *workspace) orchestrationPoliciesLocked() []OrchestrationPolicyView {
 				WhenPlugin:   step.WhenPlugin,
 				WhenProfile:  step.WhenProfile,
 				Summary:      step.Summary,
+				Options:      cloneStringMap(step.Options),
 				Enabled:      step.Enabled,
 			})
 		}
@@ -361,6 +360,72 @@ func (w *workspace) setActivePolicy(policyID string) error {
 	return w.store.savePreferences(preferences)
 }
 
+func (w *workspace) createPolicy(name string, description string) (string, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	preferences := normalizePolicies(w.preferencesState)
+	now := time.Now().UTC().Format(time.RFC3339)
+	id := newWorkspaceID("policy")
+	preferences.Policies = append(preferences.Policies, orchestrationPolicyRecord{
+		ID:          id,
+		Name:        chooseString(strings.TrimSpace(name), "Custom policy"),
+		Description: strings.TrimSpace(description),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Steps:       []orchestrationStepRecord{},
+	})
+	preferences.ActivePolicyID = id
+	w.preferencesState = preferences
+	return id, w.store.savePreferences(preferences)
+}
+
+func (w *workspace) updatePolicy(policyID string, name string, description string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	preferences := normalizePolicies(w.preferencesState)
+	for index := range preferences.Policies {
+		if preferences.Policies[index].ID != policyID {
+			continue
+		}
+		preferences.Policies[index].Name = chooseString(strings.TrimSpace(name), preferences.Policies[index].Name)
+		preferences.Policies[index].Description = strings.TrimSpace(description)
+		preferences.Policies[index].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		w.preferencesState = preferences
+		return w.store.savePreferences(preferences)
+	}
+	return fmt.Errorf("policy %s was not found", policyID)
+}
+
+func (w *workspace) deletePolicy(policyID string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	preferences := normalizePolicies(w.preferencesState)
+	if len(preferences.Policies) <= 1 {
+		return fmt.Errorf("at least one policy must remain")
+	}
+	nextPolicies := make([]orchestrationPolicyRecord, 0, len(preferences.Policies)-1)
+	removed := false
+	for _, policy := range preferences.Policies {
+		if policy.ID == policyID {
+			removed = true
+			continue
+		}
+		nextPolicies = append(nextPolicies, policy)
+	}
+	if !removed {
+		return fmt.Errorf("policy %s was not found", policyID)
+	}
+	preferences.Policies = nextPolicies
+	if preferences.ActivePolicyID == policyID {
+		preferences.ActivePolicyID = nextPolicies[0].ID
+	}
+	w.preferencesState = preferences
+	return w.store.savePreferences(preferences)
+}
+
 func (w *workspace) addPolicyStep(policyID string, step orchestrationStepRecord) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -382,6 +447,42 @@ func (w *workspace) addPolicyStep(policyID string, step orchestrationStepRecord)
 		preferences.Policies[index].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		w.preferencesState = preferences
 		return w.store.savePreferences(preferences)
+	}
+	return fmt.Errorf("policy %s was not found", policyID)
+}
+
+func (w *workspace) updatePolicyStep(policyID string, step orchestrationStepRecord) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	preferences := normalizePolicies(w.preferencesState)
+	for index := range preferences.Policies {
+		if preferences.Policies[index].ID != policyID {
+			continue
+		}
+		policy := &preferences.Policies[index]
+		for stepIndex := range policy.Steps {
+			if policy.Steps[stepIndex].ID != step.ID {
+				continue
+			}
+			current := policy.Steps[stepIndex]
+			current.Label = chooseString(strings.TrimSpace(step.Label), current.Label)
+			current.Trigger = normalizePolicyTrigger(chooseString(strings.TrimSpace(step.Trigger), current.Trigger))
+			current.PluginID = chooseString(strings.TrimSpace(step.PluginID), current.PluginID)
+			current.Stage = chooseString(strings.TrimSpace(step.Stage), current.Stage)
+			current.TargetSource = normalizePolicyTargetSource(chooseString(strings.TrimSpace(step.TargetSource), current.TargetSource))
+			current.MatchKinds = normalizePolicyKinds(step.MatchKinds)
+			current.WhenPlugin = strings.TrimSpace(step.WhenPlugin)
+			current.WhenProfile = strings.TrimSpace(step.WhenProfile)
+			current.Summary = strings.TrimSpace(step.Summary)
+			current.Enabled = step.Enabled
+			current.Options = cloneStringMap(step.Options)
+			policy.Steps[stepIndex] = current
+			policy.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+			w.preferencesState = preferences
+			return w.store.savePreferences(preferences)
+		}
+		return fmt.Errorf("step %s was not found", step.ID)
 	}
 	return fmt.Errorf("policy %s was not found", policyID)
 }

@@ -869,6 +869,174 @@ func TestEngagementWorkflowJSONMutationsAndReactRedirects(t *testing.T) {
 	}
 }
 
+func TestPlatformCampaignPolicyJSONActionsAndTopologyRedirect(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Setenv("NWA_ADMIN_PASSWORD", "adminpass")
+	app, err := newApplicationWithConfig(applicationConfig{
+		SeedFiles:       []string{writeSnapshotFixture(t)},
+		DBDSN:           filepath.Join(t.TempDir(), "service.sqlite"),
+		DataDir:         filepath.Join(t.TempDir(), "data"),
+		WorkspaceTarget: "engagement-alpha",
+	}, logger)
+	if err != nil {
+		t.Fatalf("newApplicationWithConfig() error = %v", err)
+	}
+
+	handler, err := app.routes()
+	if err != nil {
+		t.Fatalf("routes() error = %v", err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookiejar.New() error = %v", err)
+	}
+	client := &http.Client{
+		Jar: jar,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	if _, err := client.PostForm(server.URL+"/login", url.Values{
+		"login":    {"admin"},
+		"password": {"adminpass"},
+	}); err != nil {
+		t.Fatalf("login request error = %v", err)
+	}
+
+	postJSON := func(path string, payload any) *http.Response {
+		t.Helper()
+		body, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("Marshal(%s) error = %v", path, err)
+		}
+		request, err := http.NewRequest(http.MethodPost, server.URL+path, bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("NewRequest(%s) error = %v", path, err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("POST %s error = %v", path, err)
+		}
+		return response
+	}
+
+	createResponse := postJSON("/api/v1/engagements/engagement-alpha/campaigns/run", map[string]any{
+		"action":            "create_policy",
+		"policyName":        "Flow Test Policy",
+		"policyDescription": "Graph-managed test policy",
+	})
+	if createResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("create policy status = %d, want %d", createResponse.StatusCode, http.StatusAccepted)
+	}
+	_ = createResponse.Body.Close()
+
+	findPolicy := func(name string) *OrchestrationPolicyView {
+		t.Helper()
+		for _, policy := range app.workspace.orchestrationPolicies() {
+			if policy.Name == name {
+				copy := policy
+				return &copy
+			}
+		}
+		return nil
+	}
+
+	policy := findPolicy("Flow Test Policy")
+	if policy == nil {
+		t.Fatal("create policy action did not persist a custom policy")
+	}
+
+	addStepResponse := postJSON("/api/v1/engagements/engagement-alpha/campaigns/run", map[string]any{
+		"action":       "add_policy_step",
+		"policyId":     policy.ID,
+		"label":        "HTTP enrichment",
+		"pluginId":     "httpx",
+		"trigger":      "kickoff",
+		"stage":        "web-recon",
+		"targetSource": "chunk-values",
+		"matchKinds":   []string{"domain", "hostname"},
+		"summary":      "Run HTTP fingerprinting against candidate web targets",
+		"profile":      "default",
+	})
+	if addStepResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("add policy step status = %d, want %d", addStepResponse.StatusCode, http.StatusAccepted)
+	}
+	_ = addStepResponse.Body.Close()
+
+	policy = findPolicy("Flow Test Policy")
+	if policy == nil || len(policy.Steps) != 1 {
+		t.Fatalf("policy after add = %#v, want one step", policy)
+	}
+
+	updateResponse := postJSON("/api/v1/engagements/engagement-alpha/campaigns/run", map[string]any{
+		"action":       "update_policy_step",
+		"policyId":     policy.ID,
+		"stepId":       policy.Steps[0].ID,
+		"label":        "HTTP reconnaissance",
+		"pluginId":     "httpx",
+		"trigger":      "kickoff",
+		"stage":        "web-recon",
+		"targetSource": "chunk-values",
+		"matchKinds":   []string{"domain"},
+		"summary":      "Updated summary",
+		"enabled":      false,
+	})
+	if updateResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("update policy step status = %d, want %d", updateResponse.StatusCode, http.StatusAccepted)
+	}
+	_ = updateResponse.Body.Close()
+
+	policy = findPolicy("Flow Test Policy")
+	if policy == nil || policy.Steps[0].Label != "HTTP reconnaissance" || policy.Steps[0].Enabled {
+		t.Fatalf("policy step update failed: %#v", policy)
+	}
+
+	removeResponse := postJSON("/api/v1/engagements/engagement-alpha/campaigns/run", map[string]any{
+		"action":   "remove_policy_step",
+		"policyId": policy.ID,
+		"stepId":   policy.Steps[0].ID,
+	})
+	if removeResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("remove policy step status = %d, want %d", removeResponse.StatusCode, http.StatusAccepted)
+	}
+	_ = removeResponse.Body.Close()
+
+	policy = findPolicy("Flow Test Policy")
+	if policy == nil || len(policy.Steps) != 0 {
+		t.Fatalf("policy step removal failed: %#v", policy)
+	}
+
+	deleteResponse := postJSON("/api/v1/engagements/engagement-alpha/campaigns/run", map[string]any{
+		"action":   "delete_policy",
+		"policyId": policy.ID,
+	})
+	if deleteResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("delete policy status = %d, want %d", deleteResponse.StatusCode, http.StatusAccepted)
+	}
+	_ = deleteResponse.Body.Close()
+
+	if findPolicy("Flow Test Policy") != nil {
+		t.Fatal("delete policy action did not remove the custom policy")
+	}
+
+	response, err := client.Get(server.URL + "/engagements/engagement-alpha/topology")
+	if err != nil {
+		t.Fatalf("GET topology redirect error = %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("topology redirect status = %d, want %d", response.StatusCode, http.StatusSeeOther)
+	}
+	if location := response.Header.Get("Location"); location != "/app/engagements/engagement-alpha/topology" {
+		t.Fatalf("topology redirect Location = %q, want %q", location, "/app/engagements/engagement-alpha/topology")
+	}
+}
+
 func TestScopeKickoffCreatesChunksAndApproval(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	app, err := newApplicationWithConfig(applicationConfig{

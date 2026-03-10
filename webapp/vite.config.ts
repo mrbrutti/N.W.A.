@@ -16,6 +16,18 @@ export default defineConfig(({ mode }) => {
           entryFileNames: "assets/[name].js",
           chunkFileNames: "assets/[name].js",
           assetFileNames: "assets/[name].[ext]",
+          manualChunks(id) {
+            if (id.includes("node_modules/reactflow")) {
+              return "reactflow-vendor";
+            }
+            if (id.includes("node_modules/@tanstack")) {
+              return "tanstack-vendor";
+            }
+            if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+              return "react-vendor";
+            }
+            return undefined;
+          },
         },
       },
     },

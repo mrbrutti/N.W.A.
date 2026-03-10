@@ -7,38 +7,41 @@ import (
 )
 
 type platformCampaignActionInput struct {
-	Action        string   `json:"action"`
-	PolicyID      string   `json:"policyId"`
-	StepID        string   `json:"stepId"`
-	StepOrder     []string `json:"stepOrder"`
-	Label         string   `json:"label"`
-	Trigger       string   `json:"trigger"`
-	PluginID      string   `json:"pluginId"`
-	Stage         string   `json:"stage"`
-	TargetSource  string   `json:"targetSource"`
-	MatchKinds    []string `json:"matchKinds"`
-	WhenPlugin    string   `json:"whenPlugin"`
-	WhenProfile   string   `json:"whenProfile"`
-	Summary       string   `json:"summary"`
-	TargetMode    string   `json:"targetMode"`
-	Targets       []string `json:"targets"`
-	ProfileScope  string   `json:"profileScope"`
-	Severity      string   `json:"severity"`
-	Templates     string   `json:"templates"`
-	Concurrency   string   `json:"concurrency"`
-	Profile       string   `json:"profile"`
-	Ports         string   `json:"ports"`
-	TopPorts      string   `json:"topPorts"`
-	CrawlDepth    string   `json:"crawlDepth"`
-	Level         string   `json:"level"`
-	Risk          string   `json:"risk"`
-	APIBaseURL    string   `json:"apiBaseURL"`
-	ScanID        string   `json:"scanId"`
-	SiteID        string   `json:"siteId"`
-	ParentID      string   `json:"parentId"`
-	ScanConfigIDs string   `json:"scanConfigIds"`
-	APIInsecure   bool     `json:"apiInsecure"`
-	ExtraArgs     string   `json:"extraArgs"`
+	Action            string   `json:"action"`
+	PolicyID          string   `json:"policyId"`
+	PolicyName        string   `json:"policyName"`
+	PolicyDescription string   `json:"policyDescription"`
+	StepID            string   `json:"stepId"`
+	StepOrder         []string `json:"stepOrder"`
+	Label             string   `json:"label"`
+	Trigger           string   `json:"trigger"`
+	PluginID          string   `json:"pluginId"`
+	Stage             string   `json:"stage"`
+	TargetSource      string   `json:"targetSource"`
+	MatchKinds        []string `json:"matchKinds"`
+	WhenPlugin        string   `json:"whenPlugin"`
+	WhenProfile       string   `json:"whenProfile"`
+	Summary           string   `json:"summary"`
+	TargetMode        string   `json:"targetMode"`
+	Targets           []string `json:"targets"`
+	ProfileScope      string   `json:"profileScope"`
+	Severity          string   `json:"severity"`
+	Templates         string   `json:"templates"`
+	Concurrency       string   `json:"concurrency"`
+	Profile           string   `json:"profile"`
+	Ports             string   `json:"ports"`
+	TopPorts          string   `json:"topPorts"`
+	CrawlDepth        string   `json:"crawlDepth"`
+	Level             string   `json:"level"`
+	Risk              string   `json:"risk"`
+	APIBaseURL        string   `json:"apiBaseURL"`
+	ScanID            string   `json:"scanId"`
+	SiteID            string   `json:"siteId"`
+	ParentID          string   `json:"parentId"`
+	ScanConfigIDs     string   `json:"scanConfigIds"`
+	APIInsecure       bool     `json:"apiInsecure"`
+	Enabled           bool     `json:"enabled"`
+	ExtraArgs         string   `json:"extraArgs"`
 }
 
 func (app *application) runEngagementCampaignAction(engagement platformEngagementRecord, role string, input platformCampaignActionInput) error {
@@ -52,6 +55,21 @@ func (app *application) runEngagementCampaignAction(engagement platformEngagemen
 	action := chooseString(strings.TrimSpace(input.Action), "queue_run")
 
 	switch action {
+	case "create_policy":
+		if _, err := workspace.createPolicy(strings.TrimSpace(input.PolicyName), strings.TrimSpace(input.PolicyDescription)); err != nil {
+			return err
+		}
+		return app.platform.syncEngagement(engagement)
+	case "delete_policy":
+		if err := workspace.deletePolicy(strings.TrimSpace(input.PolicyID)); err != nil {
+			return err
+		}
+		return app.platform.syncEngagement(engagement)
+	case "update_policy":
+		if err := workspace.updatePolicy(strings.TrimSpace(input.PolicyID), strings.TrimSpace(input.PolicyName), strings.TrimSpace(input.PolicyDescription)); err != nil {
+			return err
+		}
+		return app.platform.syncEngagement(engagement)
 	case "activate_policy":
 		if err := workspace.setActivePolicy(strings.TrimSpace(input.PolicyID)); err != nil {
 			return err
@@ -75,6 +93,26 @@ func (app *application) runEngagementCampaignAction(engagement platformEngagemen
 			},
 		}
 		return workspace.addPolicyStep(strings.TrimSpace(input.PolicyID), step)
+	case "update_policy_step":
+		step := orchestrationStepRecord{
+			ID:           strings.TrimSpace(input.StepID),
+			Label:        strings.TrimSpace(input.Label),
+			Trigger:      strings.TrimSpace(input.Trigger),
+			PluginID:     strings.TrimSpace(input.PluginID),
+			Stage:        strings.TrimSpace(input.Stage),
+			TargetSource: strings.TrimSpace(input.TargetSource),
+			MatchKinds:   input.MatchKinds,
+			WhenPlugin:   strings.TrimSpace(input.WhenPlugin),
+			WhenProfile:  strings.TrimSpace(input.WhenProfile),
+			Summary:      strings.TrimSpace(input.Summary),
+			Enabled:      input.Enabled,
+			Options: map[string]string{
+				"profile":   strings.TrimSpace(input.Profile),
+				"ports":     strings.TrimSpace(input.Ports),
+				"top_ports": strings.TrimSpace(input.TopPorts),
+			},
+		}
+		return workspace.updatePolicyStep(strings.TrimSpace(input.PolicyID), step)
 	case "reorder_policy":
 		return workspace.reorderPolicySteps(strings.TrimSpace(input.PolicyID), input.StepOrder)
 	case "remove_policy_step":

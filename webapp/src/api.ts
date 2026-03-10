@@ -492,6 +492,7 @@ export type OrchestrationStep = {
   whenPlugin: string;
   whenProfile: string;
   summary: string;
+  options: Record<string, string>;
   enabled: boolean;
 };
 
@@ -565,6 +566,51 @@ export type EngagementSettingsPayload = {
   users: ListResponse<PlatformUser>;
   tools: ListResponse<PlatformTool>;
   connectors: ListResponse<PlatformConnector>;
+};
+
+export type TopologySummary = {
+  traced_hosts: number;
+  nodes: number;
+  edges: number;
+  max_depth: number;
+};
+
+export type TopologyGraphNode = {
+  id: string;
+  label: string;
+  count: number;
+  avg_ttl: number;
+  avg_rtt: number;
+  role: string;
+  targets: number;
+  icon: string;
+  os_label: string;
+  source: boolean;
+  hostname: string;
+  provider: string;
+};
+
+export type TopologyGraphEdge = {
+  source: string;
+  target: string;
+  count: number;
+  avg_rtt: number;
+};
+
+export type TopologyRoute = {
+  id: string;
+  target_id: string;
+  target_label: string;
+  count: number;
+  depth: number;
+  hops: string[];
+};
+
+export type TopologyGraph = {
+  summary: TopologySummary;
+  nodes: TopologyGraphNode[];
+  edges: TopologyGraphEdge[];
+  routes: TopologyRoute[];
 };
 
 export type StatCard = {
@@ -909,6 +955,14 @@ export function engagementSettingsQuery(slug: string, search: { page?: number; p
         }),
       ),
     staleTime: 30_000,
+  });
+}
+
+export function engagementTopologyQuery(slug: string) {
+  return queryOptions({
+    queryKey: ["engagement-topology", slug],
+    queryFn: () => requestJSON<TopologyGraph>(`/api/v1/engagements/${slug}/topology`),
+    staleTime: 15_000,
   });
 }
 
