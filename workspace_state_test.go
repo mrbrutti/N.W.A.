@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const mergeSnapshotFixture = `<?xml version="1.0"?>
@@ -72,6 +73,48 @@ func TestWorkspaceImportsAndMergesScans(t *testing.T) {
 	}
 	if len(host.SourceScans) != 2 {
 		t.Fatalf("SourceScans = %#v, want 2 entries", host.SourceScans)
+	}
+}
+
+func TestWorkspaceStoreClaimsExpiredRunningJobs(t *testing.T) {
+	store, err := openWorkspaceStore(filepath.Join(t.TempDir(), "workspace.nwa"))
+	if err != nil {
+		t.Fatalf("openWorkspaceStore() error = %v", err)
+	}
+
+	expired := &pluginJob{
+		ID:             "job-expired",
+		PluginID:       "fake",
+		PluginLabel:    "Fake",
+		Status:         jobRunning,
+		TargetSummary:  "1 target",
+		TargetCount:    1,
+		CreatedAt:      time.Now().UTC().Add(-2 * time.Minute).Format(time.RFC3339),
+		UpdatedAt:      time.Now().UTC().Add(-90 * time.Second).Format(time.RFC3339),
+		StartedAt:      time.Now().UTC().Add(-90 * time.Second).Format(time.RFC3339),
+		LeaseOwner:     "dead-worker",
+		LeaseExpiresAt: time.Now().UTC().Add(-30 * time.Second).Format(time.RFC3339),
+		Summary:        "stale run",
+	}
+	if err := store.upsertJob(expired); err != nil {
+		t.Fatalf("upsertJob() error = %v", err)
+	}
+
+	claimed, err := store.claimQueuedJobs("worker-1", 1, time.Now().UTC().Add(time.Minute).Format(time.RFC3339))
+	if err != nil {
+		t.Fatalf("claimQueuedJobs() error = %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("claimQueuedJobs() len = %d, want 1", len(claimed))
+	}
+	if claimed[0].ID != expired.ID {
+		t.Fatalf("claimed job id = %q, want %q", claimed[0].ID, expired.ID)
+	}
+	if claimed[0].LeaseOwner != "worker-1" {
+		t.Fatalf("LeaseOwner = %q, want worker-1", claimed[0].LeaseOwner)
+	}
+	if claimed[0].Status != jobRunning {
+		t.Fatalf("Status = %q, want %q", claimed[0].Status, jobRunning)
 	}
 }
 
@@ -344,12 +387,12 @@ func TestCreateCampaignTargetsDiffScopeAndRecordsLedgerEvent(t *testing.T) {
 		logger:    logger,
 		store:     workspace.store,
 		workspace: workspace,
-		queue:     make(chan string, 8),
 		plugins: map[string]plugin{
 			"nmap-enrich": &nmapEnrichmentPlugin{},
 			"nuclei":      &nucleiPlugin{},
 		},
-		jobs: map[string]*pluginJob{},
+		jobs:        map[string]*pluginJob{},
+		subscribers: map[int]chan struct{}{},
 	}
 
 	checkpoints := workspace.currentHistory().meta()

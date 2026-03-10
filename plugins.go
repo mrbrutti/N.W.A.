@@ -28,6 +28,12 @@ const (
 	jobFailed    = "failed"
 )
 
+const (
+	jobLeaseDuration      = 30 * time.Second
+	jobLeaseRenewInterval = 10 * time.Second
+	jobWorkerPollInterval = 250 * time.Millisecond
+)
+
 type jobArtifact struct {
 	Label   string `json:"label"`
 	RelPath string `json:"rel_path"`
@@ -54,8 +60,11 @@ type pluginJob struct {
 	WorkerZone     string            `json:"worker_zone,omitempty"`
 	Options        map[string]string `json:"options,omitempty"`
 	CreatedAt      string            `json:"created_at"`
+	UpdatedAt      string            `json:"updated_at,omitempty"`
 	StartedAt      string            `json:"started_at,omitempty"`
 	FinishedAt     string            `json:"finished_at,omitempty"`
+	LeaseOwner     string            `json:"lease_owner,omitempty"`
+	LeaseExpiresAt string            `json:"lease_expires_at,omitempty"`
 	Summary        string            `json:"summary,omitempty"`
 	Error          string            `json:"error,omitempty"`
 	Artifacts      []jobArtifact     `json:"artifacts,omitempty"`
@@ -92,11 +101,13 @@ type pluginManager struct {
 	logger           *slog.Logger
 	store            workspaceStateStore
 	workspace        *workspace
-	queue            chan string
 	mu               sync.RWMutex
 	plugins          map[string]plugin
 	dynamicPluginIDs map[string]struct{}
 	jobs             map[string]*pluginJob
+	subsMu           sync.Mutex
+	subscribers      map[int]chan struct{}
+	nextSubscriberID int
 }
 
 type pluginSubmission struct {
@@ -286,7 +297,6 @@ func newPluginManager(store workspaceStateStore, workspace *workspace, logger *s
 		logger:    logger,
 		store:     store,
 		workspace: workspace,
-		queue:     make(chan string, 64),
 		plugins: map[string]plugin{
 			"burp-connector":    &burpConnectorPlugin{},
 			"dnsx":              &dnsxPlugin{},
@@ -304,6 +314,7 @@ func newPluginManager(store workspaceStateStore, workspace *workspace, logger *s
 		},
 		dynamicPluginIDs: map[string]struct{}{},
 		jobs:             map[string]*pluginJob{},
+		subscribers:      map[int]chan struct{}{},
 	}
 	if err := manager.syncDynamicPlugins(); err != nil {
 		return nil, err
@@ -315,7 +326,7 @@ func newPluginManager(store workspaceStateStore, workspace *workspace, logger *s
 
 	workers := minInt(maxInt(runtime.GOMAXPROCS(0)/2, 1), 4)
 	for index := 0; index < workers; index++ {
-		go manager.worker()
+		go manager.worker(index + 1)
 	}
 	return manager, nil
 }
@@ -358,26 +369,12 @@ func (m *pluginManager) load() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, job := range jobs {
-		if job.Status == jobRunning || job.Status == jobQueued {
-			job.Status = jobFailed
-			job.Error = "server restarted before job completion"
-			job.FinishedAt = time.Now().UTC().Format(time.RFC3339)
+		if strings.TrimSpace(job.UpdatedAt) == "" {
+			job.UpdatedAt = chooseString(job.FinishedAt, job.StartedAt, job.CreatedAt)
 		}
 		m.jobs[job.ID] = job
 	}
-	return m.persistLocked()
-}
-
-func (m *pluginManager) persistLocked() error {
-	jobs := make([]*pluginJob, 0, len(m.jobs))
-	for _, job := range m.jobs {
-		jobs = append(jobs, cloneJob(job))
-	}
-	sort.SliceStable(jobs, func(left, right int) bool {
-		return jobs[left].CreatedAt < jobs[right].CreatedAt
-	})
-
-	return m.store.saveJobs(jobs)
+	return nil
 }
 
 func (m *pluginManager) submit(pluginID string, rawTargets []string, hostIPs []string, summary string, options map[string]string) (PluginJobView, error) {
@@ -443,16 +440,16 @@ func (m *pluginManager) submitDetailed(input pluginSubmission) (PluginJobView, e
 		WorkerZone:    strings.TrimSpace(input.WorkerZone),
 		Options:       cloneStringMap(input.Options),
 		CreatedAt:     now,
+		UpdatedAt:     now,
 		Summary:       "Queued for execution",
 	}
 
 	m.jobs[job.ID] = job
-	if err := m.persistLocked(); err != nil {
+	if err := m.store.upsertJob(job); err != nil {
 		delete(m.jobs, job.ID)
 		return PluginJobView{}, err
 	}
-
-	m.queue <- job.ID
+	m.publish()
 	return jobView(job), nil
 }
 
@@ -482,26 +479,54 @@ func (m *pluginManager) definition(pluginID string) (PluginDefinitionView, bool)
 	return normalizedPluginDefinition(plugin.Definition()), true
 }
 
-func (m *pluginManager) worker() {
-	for jobID := range m.queue {
-		m.execute(jobID)
+func (m *pluginManager) worker(index int) {
+	workerID := fmt.Sprintf("central-local-%d", index)
+	for {
+		jobs, err := m.store.claimQueuedJobs(workerID, 1, time.Now().UTC().Add(jobLeaseDuration).Format(time.RFC3339))
+		if err != nil {
+			if m.logger != nil {
+				m.logger.Warn("claim queued jobs", "worker", workerID, "error", err)
+			}
+			time.Sleep(jobWorkerPollInterval)
+			continue
+		}
+		if len(jobs) == 0 {
+			time.Sleep(jobWorkerPollInterval)
+			continue
+		}
+		for _, job := range jobs {
+			m.mu.Lock()
+			m.jobs[job.ID] = cloneJob(job)
+			m.mu.Unlock()
+			m.publish()
+			m.execute(workerID, job)
+		}
 	}
 }
 
-func (m *pluginManager) execute(jobID string) {
-	m.mu.Lock()
-	job := m.jobs[jobID]
-	if job == nil || job.Status != jobQueued {
-		m.mu.Unlock()
+func (m *pluginManager) execute(workerID string, job *pluginJob) {
+	if job == nil {
 		return
 	}
-	plugin := m.plugins[job.PluginID]
-	job.Status = jobRunning
-	job.StartedAt = time.Now().UTC().Format(time.RFC3339)
-	job.Summary = "Launching " + plugin.Definition().Label
-	_ = m.persistLocked()
-	jobCopy := cloneJob(job)
-	m.mu.Unlock()
+	plugin, ok := m.pluginByID(job.PluginID)
+	if !ok {
+		m.finish(job.ID, PluginRunResult{}, fmt.Errorf("unknown plugin %q", job.PluginID))
+		return
+	}
+	if err := m.updateJob(job.ID, func(item *pluginJob) {
+		item.Status = jobRunning
+		item.WorkerID = workerID
+		item.LeaseOwner = workerID
+		item.LeaseExpiresAt = time.Now().UTC().Add(jobLeaseDuration).Format(time.RFC3339)
+		item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		item.Summary = "Launching " + plugin.Definition().Label
+	}); err != nil && m.logger != nil {
+		m.logger.Warn("mark job running", "job", job.ID, "error", err)
+	}
+	jobCopy, ok := m.jobByID(job.ID)
+	if !ok {
+		return
+	}
 
 	workDir := filepath.Join(m.workspace.artifactRoot(), jobCopy.ID)
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
@@ -512,6 +537,9 @@ func (m *pluginManager) execute(jobID string) {
 	hosts := m.workspace.targetHosts(jobCopy.HostIPs)
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Hour)
 	defer cancel()
+	stopLease := make(chan struct{})
+	defer close(stopLease)
+	go m.renewLease(ctx, stopLease, workerID, jobCopy.ID)
 
 	result, err := plugin.Run(ctx, pluginRunRequest{
 		Job:             jobCopy,
@@ -535,45 +563,41 @@ func (m *pluginManager) updateJobSummary(jobID string, summary string) {
 	if summary == "" {
 		return
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	job := m.jobs[jobID]
-	if job == nil || job.Status != jobRunning {
-		return
-	}
-	job.Summary = summary
-	_ = m.persistLocked()
+	_ = m.updateJob(jobID, func(job *pluginJob) {
+		if job.Status != jobRunning {
+			return
+		}
+		job.Summary = summary
+		job.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		job.LeaseExpiresAt = time.Now().UTC().Add(jobLeaseDuration).Format(time.RFC3339)
+	})
 }
 
 func (m *pluginManager) finish(jobID string, result PluginRunResult, runErr error) {
-	m.mu.Lock()
-
-	job := m.jobs[jobID]
-	if job == nil {
-		m.mu.Unlock()
-		return
-	}
-
-	job.Artifacts = append([]jobArtifact(nil), result.Artifacts...)
-	job.Findings = result.Findings
-	job.DerivedTargets = append([]string(nil), result.DerivedTargets...)
-	job.Summary = result.Summary
-	job.FinishedAt = time.Now().UTC().Format(time.RFC3339)
-
-	if runErr != nil {
-		job.Status = jobFailed
-		job.Error = runErr.Error()
-	} else {
-		job.Status = jobCompleted
-		job.Error = ""
-	}
-
-	_ = m.persistLocked()
-	m.mu.Unlock()
+	_ = m.updateJob(jobID, func(job *pluginJob) {
+		job.Artifacts = append([]jobArtifact(nil), result.Artifacts...)
+		job.Findings = result.Findings
+		job.DerivedTargets = append([]string(nil), result.DerivedTargets...)
+		job.Summary = result.Summary
+		job.FinishedAt = time.Now().UTC().Format(time.RFC3339)
+		job.UpdatedAt = job.FinishedAt
+		job.LeaseOwner = ""
+		job.LeaseExpiresAt = ""
+		if runErr != nil {
+			job.Status = jobFailed
+			job.Error = runErr.Error()
+			if strings.TrimSpace(job.Summary) == "" {
+				job.Summary = "Run failed"
+			}
+		} else {
+			job.Status = jobCompleted
+			job.Error = ""
+		}
+	})
 	if m.workspace != nil {
-		m.workspace.syncCommandCenterJob(job)
+		if job, ok := m.jobByID(jobID); ok {
+			m.workspace.syncCommandCenterJob(job)
+		}
 		m.workspace.refreshHistory()
 	}
 }
@@ -786,6 +810,84 @@ func (m *pluginManager) jobByID(id string) (*pluginJob, bool) {
 		return nil, false
 	}
 	return cloneJob(job), true
+}
+
+func (m *pluginManager) subscribe() (<-chan struct{}, func()) {
+	m.subsMu.Lock()
+	defer m.subsMu.Unlock()
+	id := m.nextSubscriberID
+	m.nextSubscriberID++
+	channel := make(chan struct{}, 1)
+	m.subscribers[id] = channel
+	cancel := func() {
+		m.subsMu.Lock()
+		defer m.subsMu.Unlock()
+		if current, ok := m.subscribers[id]; ok {
+			delete(m.subscribers, id)
+			close(current)
+		}
+	}
+	return channel, cancel
+}
+
+func (m *pluginManager) publish() {
+	m.subsMu.Lock()
+	defer m.subsMu.Unlock()
+	for _, subscriber := range m.subscribers {
+		select {
+		case subscriber <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (m *pluginManager) updateJob(jobID string, mutate func(*pluginJob)) error {
+	m.mu.Lock()
+	job := m.jobs[jobID]
+	if job == nil {
+		m.mu.Unlock()
+		return nil
+	}
+	mutate(job)
+	copy := cloneJob(job)
+	m.mu.Unlock()
+
+	if err := m.store.upsertJob(copy); err != nil {
+		return err
+	}
+	m.publish()
+	return nil
+}
+
+func (m *pluginManager) renewLease(ctx context.Context, stop <-chan struct{}, workerID string, jobID string) {
+	ticker := time.NewTicker(jobLeaseRenewInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-stop:
+			return
+		case <-ticker.C:
+			_ = m.updateJob(jobID, func(job *pluginJob) {
+				if job.Status != jobRunning || job.LeaseOwner != workerID {
+					return
+				}
+				job.LeaseExpiresAt = time.Now().UTC().Add(jobLeaseDuration).Format(time.RFC3339)
+				job.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+			})
+		}
+	}
+}
+
+func (m *pluginManager) pluginByID(pluginID string) (plugin, bool) {
+	if err := m.syncDynamicPlugins(); err != nil && m.logger != nil {
+		m.logger.Warn("sync custom tools", "error", err)
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	item, ok := m.plugins[strings.TrimSpace(pluginID)]
+	return item, ok
 }
 
 type nucleiPlugin struct{}
@@ -1416,6 +1518,31 @@ func jobStatusTone(status string) string {
 	}
 }
 
+func jobClaimable(job *pluginJob, now string) bool {
+	if job == nil {
+		return false
+	}
+	switch job.Status {
+	case jobQueued:
+		return true
+	case jobRunning:
+		if strings.TrimSpace(job.LeaseExpiresAt) == "" {
+			return true
+		}
+		expiresAt, err := time.Parse(time.RFC3339, job.LeaseExpiresAt)
+		if err != nil {
+			return true
+		}
+		current, err := time.Parse(time.RFC3339, now)
+		if err != nil {
+			return true
+		}
+		return !expiresAt.After(current)
+	default:
+		return false
+	}
+}
+
 func cloneJob(job *pluginJob) *pluginJob {
 	if job == nil {
 		return nil
@@ -1426,6 +1553,7 @@ func cloneJob(job *pluginJob) *pluginJob {
 	copy.Capabilities = append([]string(nil), job.Capabilities...)
 	copy.Options = cloneStringMap(job.Options)
 	copy.Artifacts = append([]jobArtifact(nil), job.Artifacts...)
+	copy.DerivedTargets = append([]string(nil), job.DerivedTargets...)
 	return &copy
 }
 
