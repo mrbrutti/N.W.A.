@@ -16,6 +16,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   type FormEvent,
   type ReactNode,
@@ -24,6 +25,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -36,16 +38,25 @@ import {
   adminToolsQuery,
   adminUsersQuery,
   adminWorkersQuery,
+  engagementFindingDetailQuery,
   engagementFindingsQuery,
+  engagementHostDetailQuery,
   engagementHostsQuery,
+  engagementPortDetailQuery,
+  engagementPortsQuery,
   engagementSummaryQuery,
   engagementZonesQuery,
   engagementsQuery,
   login,
   logout,
+  type FindingGroup,
+  type HostPortRow,
+  type PlatformFinding,
   sessionQuery,
+  type PlatformHost,
   type PlatformAuditEvent,
   type PlatformPagination,
+  type PlatformPort,
   type SessionPayload,
   updateToolCommandTemplate,
 } from "./api";
@@ -62,6 +73,133 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+const pageSizes = [20, 50, 100] as const;
+
+function readString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function readInt(value: unknown, fallback: number) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return fallback;
+}
+
+function readPageSize(value: unknown, fallback = 20) {
+  const parsed = readInt(value, fallback);
+  return pageSizes.includes(parsed as (typeof pageSizes)[number]) ? parsed : fallback;
+}
+
+function zoneSearchState(
+  current: {
+    zone: string;
+    zoneSort: string;
+    zonesPage: number;
+    zonesPageSize: number;
+    hostSort: string;
+    hostsPage: number;
+    hostsPageSize: number;
+  },
+  next: Partial<{
+    zone: string;
+    zoneSort: string;
+    zonesPage: number;
+    zonesPageSize: number;
+    hostSort: string;
+    hostsPage: number;
+    hostsPageSize: number;
+  }>,
+) {
+  return {
+    zone: next.zone ?? current.zone,
+    zoneSort: next.zoneSort ?? current.zoneSort,
+    zonesPage: next.zonesPage ?? current.zonesPage,
+    zonesPageSize: next.zonesPageSize ?? current.zonesPageSize,
+    hostSort: next.hostSort ?? current.hostSort,
+    hostsPage: next.hostsPage ?? current.hostsPage,
+    hostsPageSize: next.hostsPageSize ?? current.hostsPageSize,
+  };
+}
+
+function hostsSearchState(
+  current: {
+    query: string;
+    zone: string;
+    sort: string;
+    page: number;
+    pageSize: number;
+  },
+  next: Partial<{
+    query: string;
+    zone: string;
+    sort: string;
+    page: number;
+    pageSize: number;
+  }>,
+) {
+  return {
+    query: next.query ?? current.query,
+    zone: next.zone ?? current.zone,
+    sort: next.sort ?? current.sort,
+    page: next.page ?? current.page,
+    pageSize: next.pageSize ?? current.pageSize,
+  };
+}
+
+function portsSearchState(
+  current: {
+    query: string;
+    sort: string;
+    page: number;
+    pageSize: number;
+  },
+  next: Partial<{
+    query: string;
+    sort: string;
+    page: number;
+    pageSize: number;
+  }>,
+) {
+  return {
+    query: next.query ?? current.query,
+    sort: next.sort ?? current.sort,
+    page: next.page ?? current.page,
+    pageSize: next.pageSize ?? current.pageSize,
+  };
+}
+
+function findingsSearchState(
+  current: {
+    query: string;
+    severity: string;
+    sort: string;
+    page: number;
+    pageSize: number;
+  },
+  next: Partial<{
+    query: string;
+    severity: string;
+    sort: string;
+    page: number;
+    pageSize: number;
+  }>,
+) {
+  return {
+    query: next.query ?? current.query,
+    severity: next.severity ?? current.severity,
+    sort: next.sort ?? current.sort,
+    page: next.page ?? current.page,
+    pageSize: next.pageSize ?? current.pageSize,
+  };
+}
 
 async function requireSession(context: RouterContext) {
   const session = await context.queryClient.ensureQueryData(sessionQuery());
@@ -188,14 +326,75 @@ const engagementOverviewRoute = createRoute({
   component: EngagementOverviewPage,
 });
 
+const engagementZonesRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/zones",
+  validateSearch: (search: Record<string, unknown>) => ({
+    zone: readString(search.zone),
+    zoneSort: readString(search.zoneSort, "hosts"),
+    zonesPage: readInt(search.zonesPage, 1),
+    zonesPageSize: readPageSize(search.zonesPageSize),
+    hostSort: readString(search.hostSort, "findings"),
+    hostsPage: readInt(search.hostsPage, 1),
+    hostsPageSize: readPageSize(search.hostsPageSize),
+  }),
+  component: EngagementZonesPage,
+});
+
 const engagementHostsRoute = createRoute({
   getParentRoute: () => engagementRoute,
   path: "/hosts",
   validateSearch: (search: Record<string, unknown>) => ({
-    query: typeof search.query === "string" ? search.query : "",
-    zone: typeof search.zone === "string" ? search.zone : "",
+    query: readString(search.query),
+    zone: readString(search.zone),
+    sort: readString(search.sort, "findings"),
+    page: readInt(search.page, 1),
+    pageSize: readPageSize(search.pageSize),
   }),
   component: EngagementHostsPage,
+});
+
+const engagementHostDetailRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/hosts/$ip",
+  component: EngagementHostDetailPage,
+});
+
+const engagementPortsRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/ports",
+  validateSearch: (search: Record<string, unknown>) => ({
+    query: readString(search.query),
+    sort: readString(search.sort, "hosts"),
+    page: readInt(search.page, 1),
+    pageSize: readPageSize(search.pageSize),
+  }),
+  component: EngagementPortsPage,
+});
+
+const engagementPortDetailRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/ports/$protocol/$port",
+  component: EngagementPortDetailPage,
+});
+
+const engagementFindingsRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/findings",
+  validateSearch: (search: Record<string, unknown>) => ({
+    query: readString(search.query),
+    severity: readString(search.severity, "all"),
+    sort: readString(search.sort, "severity"),
+    page: readInt(search.page, 1),
+    pageSize: readPageSize(search.pageSize),
+  }),
+  component: EngagementFindingsPage,
+});
+
+const engagementFindingDetailRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/findings/$groupID",
+  component: EngagementFindingDetailPage,
 });
 
 const routeTree = rootRoute.addChildren([
@@ -211,7 +410,16 @@ const routeTree = rootRoute.addChildren([
     adminAuditRoute,
   ]),
   engagementsRoute,
-  engagementRoute.addChildren([engagementOverviewRoute, engagementHostsRoute]),
+  engagementRoute.addChildren([
+    engagementOverviewRoute,
+    engagementZonesRoute,
+    engagementHostsRoute,
+    engagementHostDetailRoute,
+    engagementPortsRoute,
+    engagementPortDetailRoute,
+    engagementFindingsRoute,
+    engagementFindingDetailRoute,
+  ]),
 ]);
 
 const router = createRouter({
@@ -854,6 +1062,9 @@ function EngagementsPage() {
 function EngagementLayout() {
   const { slug } = engagementRoute.useParams();
   const engagements = useSuspenseQuery(engagementsQuery());
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const engagement = engagements.data.items.find((item) => item.slug === slug);
 
   if (!engagement) {
@@ -868,10 +1079,36 @@ function EngagementLayout() {
         subtitle={engagement.scopeSummary || engagement.description}
         actions={
           <div className="cc-subnav">
-            <a href={`/app/engagements/${engagement.slug}`} className="is-active">
+            <a
+              href={`/app/engagements/${engagement.slug}`}
+              className={pathname === `/engagements/${engagement.slug}` ? "is-active" : ""}
+            >
               Overview
             </a>
-            <a href={`/app/engagements/${engagement.slug}/hosts`}>Hosts</a>
+            <a
+              href={`/app/engagements/${engagement.slug}/zones`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/zones`) ? "is-active" : ""}
+            >
+              Zones
+            </a>
+            <a
+              href={`/app/engagements/${engagement.slug}/hosts`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/hosts`) ? "is-active" : ""}
+            >
+              Hosts
+            </a>
+            <a
+              href={`/app/engagements/${engagement.slug}/ports`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/ports`) ? "is-active" : ""}
+            >
+              Ports
+            </a>
+            <a
+              href={`/app/engagements/${engagement.slug}/findings`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/findings`) ? "is-active" : ""}
+            >
+              Findings
+            </a>
           </div>
         }
       />
@@ -883,8 +1120,10 @@ function EngagementLayout() {
 function EngagementOverviewPage() {
   const { slug } = engagementRoute.useParams();
   const stats = useSuspenseQuery(engagementSummaryQuery(slug));
-  const hosts = useSuspenseQuery(engagementHostsQuery(slug, {}));
-  const findings = useSuspenseQuery(engagementFindingsQuery(slug));
+  const zones = useSuspenseQuery(engagementZonesQuery(slug, { pageSize: 20 }));
+  const hosts = useSuspenseQuery(engagementHostsQuery(slug, { sort: "findings", pageSize: 20 }));
+  const ports = useSuspenseQuery(engagementPortsQuery(slug, { sort: "hosts", pageSize: 20 }));
+  const findings = useSuspenseQuery(engagementFindingsQuery(slug, { sort: "severity", pageSize: 20 }));
 
   return (
     <div className="cc-stack">
@@ -896,15 +1135,40 @@ function EngagementOverviewPage() {
         }))}
       />
       <div className="cc-grid cc-grid--two">
+        <Panel title="Zone map" meta={`${zones.data.pagination.total} zones`}>
+          <List
+            items={zones.data.items.slice(0, 8).map((zone) => ({
+              key: zone.id,
+              label: zone.name,
+              detail: `${zone.kind} · ${zone.hostCount} hosts`,
+              href: `/app/engagements/${slug}/zones?zone=${encodeURIComponent(zone.id)}`,
+            }))}
+            empty="No zones derived yet."
+          />
+        </Panel>
         <Panel title="Priority hosts" meta="Top of current slice">
           <List
             items={hosts.data.items.slice(0, 8).map((host) => ({
               key: host.ip,
               label: host.displayName,
               detail: `${host.ip} · ${host.openPorts} ports · ${host.findings} findings`,
-              href: `/app/engagements/${slug}/hosts?query=${encodeURIComponent(host.ip)}`,
+              href: `/app/engagements/${slug}/hosts/${encodeURIComponent(host.ip)}`,
             }))}
             empty="No host inventory yet."
+          />
+        </Panel>
+      </div>
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Service surface" meta="Most exposed ports">
+          <List
+            items={ports.data.items.slice(0, 8).map((port) => ({
+              key: `${port.protocol}-${port.port}`,
+              label: port.label,
+              detail: `${port.hosts} hosts · ${port.findings} findings · ${port.service || "unknown service"}`,
+              href: `/app/engagements/${slug}/ports/${encodeURIComponent(port.protocol)}/${encodeURIComponent(port.port)}`,
+            }))}
+            empty="No ports observed yet."
           />
         </Panel>
         <Panel title="Finding groups" meta="Highest-signal definitions">
@@ -913,8 +1177,223 @@ function EngagementOverviewPage() {
               key: finding.id,
               label: finding.name,
               detail: `${finding.severity} · ${finding.occurrences} occurrences`,
+              href: `/app/engagements/${slug}/findings/${encodeURIComponent(finding.id)}`,
             }))}
             empty="No finding groups yet."
+          />
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function EngagementZonesPage() {
+  const { slug } = engagementRoute.useParams();
+  const search = engagementZonesRoute.useSearch();
+  const navigate = useNavigate();
+  const zones = useSuspenseQuery(
+    engagementZonesQuery(slug, {
+      sort: search.zoneSort,
+      page: search.zonesPage,
+      pageSize: search.zonesPageSize,
+    }),
+  );
+
+  useEffect(() => {
+    if (search.zone || zones.data.items.length === 0) {
+      return;
+    }
+    startTransition(() => {
+      void navigate({
+        to: "/engagements/$slug/zones",
+        params: { slug },
+        search: () =>
+          zoneSearchState(search, {
+            zone: zones.data.items[0]?.id || "",
+          }),
+        replace: true,
+      });
+    });
+  }, [navigate, search.zone, slug, zones.data.items]);
+
+  const hosts = useSuspenseQuery(
+    engagementHostsQuery(slug, {
+      zone: search.zone,
+      sort: search.hostSort,
+      page: search.hostsPage,
+      pageSize: search.hostsPageSize,
+    }),
+  );
+
+  const selectedZone = zones.data.items.find((zone) => zone.id === search.zone);
+
+  return (
+    <div className="cc-stack">
+      <StatGrid
+        items={[
+          {
+            label: "Zones",
+            value: zones.data.pagination.total.toString(),
+            detail: "Derived network and scope groupings",
+          },
+          {
+            label: "Selected",
+            value: selectedZone?.name || "All",
+            detail: selectedZone ? `${selectedZone.kind} scope` : "Choose a zone to focus triage",
+          },
+          {
+            label: "Hosts in slice",
+            value: hosts.data.pagination.total.toString(),
+            detail: "Host inventory under the current zone filter",
+          },
+        ]}
+      />
+
+      <div className="cc-grid cc-grid--sidebar">
+        <Panel title="Zone navigator" meta={`${zones.data.pagination.total} zones`}>
+          <section className="cc-toolbar cc-toolbar--compact">
+            <label className="cc-field">
+              <span>Order</span>
+              <select
+                value={search.zoneSort}
+                onChange={(event) => {
+                  const zoneSort = event.target.value;
+                  startTransition(() => {
+                    void navigate({
+                      to: "/engagements/$slug/zones",
+                      params: { slug },
+                      search: () =>
+                        zoneSearchState(search, {
+                          zoneSort,
+                          zonesPage: 1,
+                        }),
+                      replace: true,
+                    });
+                  });
+                }}
+              >
+                <option value="hosts">Largest first</option>
+                <option value="name">Name</option>
+              </select>
+            </label>
+          </section>
+          <VirtualTable
+            columns={[
+              { key: "zone", label: "Zone", width: "1.25fr" },
+              { key: "kind", label: "Kind", width: "0.7fr" },
+              { key: "hosts", label: "Hosts", width: "0.55fr", align: "right" },
+            ]}
+            items={zones.data.items}
+            getKey={(zone) => zone.id}
+            empty="No zones derived yet."
+            pagination={zones.data.pagination}
+            onPageChange={(page) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/zones",
+                  params: { slug },
+                  search: () => zoneSearchState(search, { zonesPage: page }),
+                  replace: true,
+                });
+              });
+            }}
+            onPageSizeChange={(pageSize) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/zones",
+                  params: { slug },
+                  search: () => zoneSearchState(search, { zonesPage: 1, zonesPageSize: pageSize }),
+                  replace: true,
+                });
+              });
+            }}
+            renderRow={(zone) => [
+              <button
+                className={`cc-table-link ${search.zone === zone.id ? "is-active" : ""}`}
+                key={`${zone.id}-select`}
+                onClick={() => {
+                  startTransition(() => {
+                    void navigate({
+                      to: "/engagements/$slug/zones",
+                      params: { slug },
+                      search: () =>
+                        zoneSearchState(search, {
+                          zone: zone.id,
+                          hostsPage: 1,
+                        }),
+                      replace: true,
+                    });
+                  });
+                }}
+                type="button"
+              >
+                <strong>{zone.name}</strong>
+                <small>{zone.scope || "Derived grouping"}</small>
+              </button>,
+              <span key={`${zone.id}-kind`} className="cc-cell-meta">
+                {zone.kind}
+              </span>,
+              <strong key={`${zone.id}-hosts`} className="cc-cell-strong cc-cell-strong--right">
+                {zone.hostCount}
+              </strong>,
+            ]}
+          />
+        </Panel>
+
+        <Panel title="Zone hosts" meta={selectedZone ? selectedZone.name : "All hosts"}>
+          <section className="cc-toolbar cc-toolbar--compact">
+            <label className="cc-field">
+              <span>Order</span>
+              <select
+                value={search.hostSort}
+                onChange={(event) => {
+                  const hostSort = event.target.value;
+                  startTransition(() => {
+                    void navigate({
+                      to: "/engagements/$slug/zones",
+                      params: { slug },
+                      search: () =>
+                        zoneSearchState(search, {
+                          hostSort,
+                          hostsPage: 1,
+                        }),
+                      replace: true,
+                    });
+                  });
+                }}
+              >
+                <option value="findings">Findings</option>
+                <option value="ports">Ports</option>
+                <option value="critical">Critical</option>
+                <option value="sources">Sources</option>
+                <option value="name">Name</option>
+              </select>
+            </label>
+          </section>
+          <HostInventoryTable
+            hosts={hosts.data.items}
+            empty="No hosts match the current zone slice."
+            pagination={hosts.data.pagination}
+            onPageChange={(page) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/zones",
+                  params: { slug },
+                  search: () => zoneSearchState(search, { hostsPage: page }),
+                  replace: true,
+                });
+              });
+            }}
+            onPageSizeChange={(pageSize) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/zones",
+                  params: { slug },
+                  search: () => zoneSearchState(search, { hostsPage: 1, hostsPageSize: pageSize }),
+                  replace: true,
+                });
+              });
+            }}
           />
         </Panel>
       </div>
@@ -926,7 +1405,7 @@ function EngagementHostsPage() {
   const { slug } = engagementRoute.useParams();
   const search = engagementHostsRoute.useSearch();
   const navigate = useNavigate();
-  const zones = useSuspenseQuery(engagementZonesQuery(slug));
+  const zones = useSuspenseQuery(engagementZonesQuery(slug, { sort: "name", pageSize: 100 }));
   const [queryInput, setQueryInput] = useState(search.query);
   const deferredQuery = useDeferredValue(queryInput);
 
@@ -942,10 +1421,7 @@ function EngagementHostsPage() {
       void navigate({
         to: "/engagements/$slug/hosts",
         params: { slug },
-        search: (previous: { query?: string; zone?: string }) => ({
-          query: deferredQuery,
-          zone: previous.zone ?? "",
-        }),
+        search: () => hostsSearchState(search, { query: deferredQuery, page: 1 }),
         replace: true,
       });
     });
@@ -955,6 +1431,9 @@ function EngagementHostsPage() {
     engagementHostsQuery(slug, {
       query: search.query,
       zone: search.zone,
+      sort: search.sort,
+      page: search.page,
+      pageSize: search.pageSize,
     }),
   );
 
@@ -963,8 +1442,22 @@ function EngagementHostsPage() {
     [search.zone, zones.data.items],
   );
 
+  const sliceStats = useMemo(() => {
+    const criticalHosts = hosts.data.items.filter((host) => host.critical > 0).length;
+    const exposedHosts = hosts.data.items.filter((host) => host.exposureTone === "risk" || host.exposureTone === "warning").length;
+    const findings = hosts.data.items.reduce((total, host) => total + host.findings, 0);
+    return [
+      { label: "Slice hosts", value: hosts.data.pagination.total.toString(), detail: "Hosts matching current filters" },
+      { label: "Critical hosts", value: criticalHosts.toString(), detail: "Hosts with critical findings on this page" },
+      { label: "Exposed", value: exposedHosts.toString(), detail: "High- or medium-exposure hosts in the current page" },
+      { label: "Findings", value: findings.toString(), detail: "Grouped finding hits across the visible rows" },
+    ];
+  }, [hosts.data.items, hosts.data.pagination.total]);
+
   return (
     <div className="cc-stack">
+      <StatGrid items={sliceStats} />
+
       <section className="cc-toolbar">
         <label className="cc-field">
           <span>Search</span>
@@ -984,10 +1477,7 @@ function EngagementHostsPage() {
                 void navigate({
                   to: "/engagements/$slug/hosts",
                   params: { slug },
-                  search: (previous: { query?: string; zone?: string }) => ({
-                    query: previous.query ?? "",
-                    zone,
-                  }),
+                  search: () => hostsSearchState(search, { zone, page: 1 }),
                   replace: true,
                 });
               });
@@ -999,6 +1489,29 @@ function EngagementHostsPage() {
                 {zone.name}
               </option>
             ))}
+          </select>
+        </label>
+        <label className="cc-field">
+          <span>Order</span>
+          <select
+            value={search.sort}
+            onChange={(event) => {
+              const sort = event.target.value;
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/hosts",
+                  params: { slug },
+                  search: () => hostsSearchState(search, { sort, page: 1 }),
+                  replace: true,
+                });
+              });
+            }}
+          >
+            <option value="findings">Findings</option>
+            <option value="ports">Ports</option>
+            <option value="critical">Critical</option>
+            <option value="sources">Sources</option>
+            <option value="name">Name</option>
           </select>
         </label>
       </section>
@@ -1014,41 +1527,880 @@ function EngagementHostsPage() {
               label: zone.name,
               detail: `${zone.kind} · ${zone.hostCount} hosts`,
               active: search.zone === zone.id,
-              onClick: () => {
-                startTransition(() => {
-                  void navigate({
-                    to: "/engagements/$slug/hosts",
-                    params: { slug },
-                    search: (previous: { query?: string; zone?: string }) => ({
-                      query: previous.query ?? "",
-                      zone: zone.id,
-                    }),
-                    replace: true,
-                  });
-                });
-              },
+              href: `/app/engagements/${slug}/hosts?zone=${encodeURIComponent(zone.id)}`,
             }))}
             empty="No zones derived yet."
           />
         </Panel>
 
         <Panel title="Host inventory" meta={`${hosts.data.pagination.total} hosts`}>
-          <Table
-            columns={["Host", "OS", "Ports", "Findings", "Exposure"]}
-            rows={hosts.data.items.map((host) => [
-              <div key={host.ip}>
-                <strong>{host.displayName}</strong>
-                <small>{host.ip}</small>
-              </div>,
-              host.os || "Unknown",
-              host.openPorts.toString(),
-              host.findings.toString(),
-              host.exposure,
-            ])}
+          <HostInventoryTable
+            hosts={hosts.data.items}
             empty="No hosts match the current slice."
             pagination={hosts.data.pagination}
+            onPageChange={(page) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/hosts",
+                  params: { slug },
+                  search: () => hostsSearchState(search, { page }),
+                  replace: true,
+                });
+              });
+            }}
+            onPageSizeChange={(pageSize) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/hosts",
+                  params: { slug },
+                  search: () => hostsSearchState(search, { page: 1, pageSize }),
+                  replace: true,
+                });
+              });
+            }}
           />
         </Panel>
+      </div>
+    </div>
+  );
+}
+
+function EngagementHostDetailPage() {
+  const { slug, ip } = engagementHostDetailRoute.useParams();
+  const detail = useSuspenseQuery(engagementHostDetailQuery(slug, ip));
+  const host = detail.data.host;
+
+  return (
+    <div className="cc-stack">
+      <StatGrid
+        items={[
+          { label: "Host", value: host.summary.displayName, detail: host.summary.ip },
+          { label: "Open ports", value: host.summary.openPortCount.toString(), detail: `${host.closedPortCount} closed observed` },
+          { label: "Findings", value: host.summary.findings.total.toString(), detail: `${host.summary.findings.critical} critical · ${host.summary.findings.high} high` },
+          { label: "Coverage", value: host.summary.coverage.label, detail: host.summary.coverage.detail },
+        ]}
+      />
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Host posture" meta={host.status || "Observed"}>
+          <div className="cc-detail-grid">
+            <InfoPair label="IP" value={host.summary.ip} />
+            <InfoPair label="Hostnames" value={host.summary.hostnames.join(", ") || "No resolved names"} />
+            <InfoPair label="Operating system" value={host.summary.os || "Unknown fingerprint"} />
+            <InfoPair label="Exposure" value={`${host.summary.exposure.label} · ${host.summary.exposure.detail}`} />
+            <InfoPair label="Source scans" value={host.sourceScans.join(", ") || "No provenance"} />
+            <InfoPair label="HTTP targets" value={host.summary.httpTargets.toString()} />
+          </div>
+        </Panel>
+
+        <Panel title="Related zones" meta={`${detail.data.relatedZones.length} memberships`}>
+          <List
+            items={detail.data.relatedZones.map((zone) => ({
+              key: zone.id,
+              label: zone.name,
+              detail: `${zone.kind} · ${zone.hostCount} hosts`,
+              href: `/app/engagements/${slug}/zones?zone=${encodeURIComponent(zone.id)}`,
+            }))}
+            empty="This host is not attached to any zone."
+          />
+        </Panel>
+      </div>
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Port inventory" meta={`${host.ports.length} observed ports`}>
+          <HostPortInventoryTable ports={host.ports} />
+        </Panel>
+
+        <Panel title="Grouped findings" meta={`${detail.data.findings.length} definitions`}>
+          <FindingGroupTable
+            findings={detail.data.findings}
+            slug={slug}
+            empty="No grouped findings tied to this host."
+          />
+        </Panel>
+      </div>
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Recent runs" meta={`${detail.data.recentRuns.length} related jobs`}>
+          <RunList runs={detail.data.recentRuns} empty="No recent jobs for this host." />
+        </Panel>
+
+        <Panel title="Recommendations" meta={`${host.recommendations.length} suggested actions`}>
+          <List
+            items={host.recommendations.map((item, index) => ({
+              key: `${item.title}-${index}`,
+              label: item.title,
+              detail: `${item.detail} · ${item.evidence}`,
+            }))}
+            empty="No recommendations generated."
+          />
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function EngagementPortsPage() {
+  const { slug } = engagementRoute.useParams();
+  const search = engagementPortsRoute.useSearch();
+  const navigate = useNavigate();
+  const [queryInput, setQueryInput] = useState(search.query);
+  const deferredQuery = useDeferredValue(queryInput);
+
+  useEffect(() => {
+    setQueryInput(search.query);
+  }, [search.query]);
+
+  useEffect(() => {
+    if (deferredQuery === search.query) {
+      return;
+    }
+    startTransition(() => {
+      void navigate({
+        to: "/engagements/$slug/ports",
+        params: { slug },
+        search: () => portsSearchState(search, { query: deferredQuery, page: 1 }),
+        replace: true,
+      });
+    });
+  }, [deferredQuery, navigate, search.query, slug]);
+
+  const ports = useSuspenseQuery(
+    engagementPortsQuery(slug, {
+      query: search.query,
+      sort: search.sort,
+      page: search.page,
+      pageSize: search.pageSize,
+    }),
+  );
+
+  const sliceStats = useMemo(() => {
+    const findingHits = ports.data.items.reduce((total, item) => total + item.findings, 0);
+    const hostSurface = ports.data.items.reduce((total, item) => total + item.hosts, 0);
+    return [
+      { label: "Ports", value: ports.data.pagination.total.toString(), detail: "Distinct protocol and port combinations" },
+      { label: "Host memberships", value: hostSurface.toString(), detail: "Hosts represented across the current page" },
+      { label: "Finding hits", value: findingHits.toString(), detail: "Finding counts across the visible service rows" },
+    ];
+  }, [ports.data.items, ports.data.pagination.total]);
+
+  return (
+    <div className="cc-stack">
+      <StatGrid items={sliceStats} />
+
+      <section className="cc-toolbar">
+        <label className="cc-field">
+          <span>Search</span>
+          <input
+            placeholder="Port label or service"
+            value={queryInput}
+            onChange={(event) => setQueryInput(event.target.value)}
+          />
+        </label>
+        <label className="cc-field">
+          <span>Order</span>
+          <select
+            value={search.sort}
+            onChange={(event) => {
+              const sort = event.target.value;
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/ports",
+                  params: { slug },
+                  search: () => portsSearchState(search, { sort, page: 1 }),
+                  replace: true,
+                });
+              });
+            }}
+          >
+            <option value="hosts">Hosts</option>
+            <option value="service">Service</option>
+            <option value="port">Port</option>
+          </select>
+        </label>
+      </section>
+
+      <Panel title="Port inventory" meta={`${ports.data.pagination.total} rows`}>
+        <PortInventoryTable
+          ports={ports.data.items}
+          empty="No ports match the current filters."
+          pagination={ports.data.pagination}
+          onPageChange={(page) => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/ports",
+                params: { slug },
+                search: () => portsSearchState(search, { page }),
+                replace: true,
+              });
+            });
+          }}
+          onPageSizeChange={(pageSize) => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/ports",
+                params: { slug },
+                search: () => portsSearchState(search, { page: 1, pageSize }),
+                replace: true,
+              });
+            });
+          }}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+function EngagementPortDetailPage() {
+  const { slug, protocol, port } = engagementPortDetailRoute.useParams();
+  const detail = useSuspenseQuery(engagementPortDetailQuery(slug, protocol, port));
+
+  return (
+    <div className="cc-stack">
+      <StatGrid
+        items={[
+          { label: "Port", value: detail.data.port.label, detail: detail.data.port.service || "Unknown service" },
+          { label: "Hosts", value: detail.data.port.hostCount.toString(), detail: "Hosts exposing this port" },
+          { label: "Findings", value: detail.data.port.findingTotals.total.toString(), detail: `${detail.data.port.findingTotals.critical} critical · ${detail.data.port.findingTotals.high} high` },
+        ]}
+      />
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Affected hosts" meta={`${detail.data.port.hosts.length} hosts`}>
+          <VirtualTable
+            columns={[
+              { key: "host", label: "Host", width: "1.2fr" },
+              { key: "service", label: "Service", width: "0.9fr" },
+              { key: "version", label: "Version", width: "0.9fr" },
+              { key: "findings", label: "Findings", width: "0.55fr", align: "right" },
+            ]}
+            items={detail.data.port.hosts}
+            getKey={(host) => `${host.ip}-${host.service}`}
+            empty="No hosts available for this port."
+            renderRow={(host) => [
+              <a className="cc-table-link" href={`/app/engagements/${slug}/hosts/${encodeURIComponent(host.ip)}`} key={`${host.ip}-host`}>
+                <strong>{host.displayName}</strong>
+                <small>{host.ip} · {host.os || "Unknown OS"}</small>
+              </a>,
+              <span key={`${host.ip}-service`} className="cc-cell-meta">
+                {host.service || "Unknown"}
+              </span>,
+              <span key={`${host.ip}-version`} className="cc-cell-meta">
+                {[host.product, host.version].filter(Boolean).join(" ") || "No version data"}
+              </span>,
+              <strong key={`${host.ip}-findings`} className="cc-cell-strong cc-cell-strong--right">
+                {host.findings}
+              </strong>,
+            ]}
+          />
+        </Panel>
+
+        <Panel title="Related findings" meta={`${detail.data.port.relatedFindings.length} grouped definitions`}>
+          <FindingGroupTable
+            findings={detail.data.port.relatedFindings}
+            slug={slug}
+            empty="No grouped findings tied to this port."
+          />
+        </Panel>
+      </div>
+
+      <Panel title="Recent runs" meta={`${detail.data.recentRuns.length} jobs`}>
+        <RunList runs={detail.data.recentRuns} empty="No related runs recorded." />
+      </Panel>
+    </div>
+  );
+}
+
+function EngagementFindingsPage() {
+  const { slug } = engagementRoute.useParams();
+  const search = engagementFindingsRoute.useSearch();
+  const navigate = useNavigate();
+  const [queryInput, setQueryInput] = useState(search.query);
+  const deferredQuery = useDeferredValue(queryInput);
+
+  useEffect(() => {
+    setQueryInput(search.query);
+  }, [search.query]);
+
+  useEffect(() => {
+    if (deferredQuery === search.query) {
+      return;
+    }
+    startTransition(() => {
+      void navigate({
+        to: "/engagements/$slug/findings",
+        params: { slug },
+        search: () => findingsSearchState(search, { query: deferredQuery, page: 1 }),
+        replace: true,
+      });
+    });
+  }, [deferredQuery, navigate, search.query, slug]);
+
+  const findings = useSuspenseQuery(
+    engagementFindingsQuery(slug, {
+      query: search.query,
+      severity: search.severity,
+      sort: search.sort,
+      page: search.page,
+      pageSize: search.pageSize,
+    }),
+  );
+
+  const sliceStats = useMemo(() => {
+    const critical = findings.data.items.filter((item) => item.severity === "critical").length;
+    const high = findings.data.items.filter((item) => item.severity === "high").length;
+    const occurrences = findings.data.items.reduce((total, item) => total + item.occurrences, 0);
+    return [
+      { label: "Definitions", value: findings.data.pagination.total.toString(), detail: "Grouped finding definitions in the current slice" },
+      { label: "Occurrences", value: occurrences.toString(), detail: "Occurrence count across the visible rows" },
+      { label: "Critical/high", value: `${critical + high}`, detail: `${critical} critical · ${high} high on this page` },
+    ];
+  }, [findings.data.items, findings.data.pagination.total]);
+
+  return (
+    <div className="cc-stack">
+      <StatGrid items={sliceStats} />
+
+      <section className="cc-toolbar">
+        <label className="cc-field">
+          <span>Search</span>
+          <input
+            placeholder="Finding name, source, or template"
+            value={queryInput}
+            onChange={(event) => setQueryInput(event.target.value)}
+          />
+        </label>
+        <label className="cc-field">
+          <span>Severity</span>
+          <select
+            value={search.severity}
+            onChange={(event) => {
+              const severity = event.target.value;
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/findings",
+                  params: { slug },
+                  search: () => findingsSearchState(search, { severity, page: 1 }),
+                  replace: true,
+                });
+              });
+            }}
+          >
+            <option value="all">All severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="info">Info</option>
+          </select>
+        </label>
+        <label className="cc-field">
+          <span>Order</span>
+          <select
+            value={search.sort}
+            onChange={(event) => {
+              const sort = event.target.value;
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/findings",
+                  params: { slug },
+                  search: () => findingsSearchState(search, { sort, page: 1 }),
+                  replace: true,
+                });
+              });
+            }}
+          >
+            <option value="severity">Severity</option>
+            <option value="hosts">Hosts</option>
+            <option value="recent">Recent</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+      </section>
+
+      <Panel title="Finding inventory" meta={`${findings.data.pagination.total} rows`}>
+        <FindingInventoryTable
+          findings={findings.data.items}
+          slug={slug}
+          empty="No findings match the current filters."
+          pagination={findings.data.pagination}
+          onPageChange={(page) => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/findings",
+                params: { slug },
+                search: () => findingsSearchState(search, { page }),
+                replace: true,
+              });
+            });
+          }}
+          onPageSizeChange={(pageSize) => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/findings",
+                params: { slug },
+                search: () => findingsSearchState(search, { page: 1, pageSize }),
+                replace: true,
+              });
+            });
+          }}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+function EngagementFindingDetailPage() {
+  const { slug, groupID } = engagementFindingDetailRoute.useParams();
+  const detail = useSuspenseQuery(engagementFindingDetailQuery(slug, groupID));
+
+  return (
+    <div className="cc-stack">
+      <StatGrid
+        items={[
+          { label: "Finding", value: detail.data.finding.group.name, detail: detail.data.finding.group.templateId || detail.data.finding.group.source },
+          { label: "Severity", value: detail.data.finding.group.severity, detail: `${detail.data.finding.group.occurrences} occurrences` },
+          { label: "Hosts", value: detail.data.finding.group.hosts.toString(), detail: `${detail.data.finding.group.ports} distinct ports` },
+        ]}
+      />
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Definition" meta={detail.data.finding.group.source}>
+          <div className="cc-detail-grid">
+            <InfoPair label="Template" value={detail.data.finding.group.templateId || "No template ID"} />
+            <InfoPair label="First seen" value={detail.data.finding.group.firstSeen || "Unknown"} />
+            <InfoPair label="Last seen" value={detail.data.finding.group.lastSeen || "Unknown"} />
+            <InfoPair label="Tags" value={detail.data.finding.tags.join(", ") || "No tags"} />
+            <InfoPair label="Description" value={detail.data.finding.description || "No long-form description"} />
+          </div>
+        </Panel>
+
+        <Panel title="Recent runs" meta={`${detail.data.recentRuns.length} jobs`}>
+          <RunList runs={detail.data.recentRuns} empty="No related runs recorded." />
+        </Panel>
+      </div>
+
+      <Panel title="Occurrences" meta={`${detail.data.finding.occurrences.length} hits`}>
+        <VirtualTable
+          columns={[
+            { key: "host", label: "Host", width: "1fr" },
+            { key: "target", label: "Target", width: "1.1fr" },
+            { key: "port", label: "Port", width: "0.5fr" },
+            { key: "scans", label: "Scans", width: "1fr" },
+          ]}
+          items={detail.data.finding.occurrences}
+          getKey={(occurrence) => `${occurrence.hostIp}-${occurrence.target}-${occurrence.matchedAt}`}
+          empty="No finding occurrences available."
+          renderRow={(occurrence) => [
+            <a className="cc-table-link" href={`/app/engagements/${slug}/hosts/${encodeURIComponent(occurrence.hostIp)}`} key={`${occurrence.hostIp}-host`}>
+              <strong>{occurrence.hostLabel}</strong>
+              <small>{occurrence.hostIp}</small>
+            </a>,
+            <span key={`${occurrence.hostIp}-target`} className="cc-cell-meta">
+              {occurrence.target || "No target"}
+            </span>,
+            <span key={`${occurrence.hostIp}-port`} className="cc-cell-meta">
+              {occurrence.port || "0"}
+            </span>,
+            <span key={`${occurrence.hostIp}-scans`} className="cc-cell-meta">
+              {occurrence.scans.join(", ") || "No scan provenance"}
+            </span>,
+          ]}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+function HostInventoryTable({
+  hosts,
+  empty,
+  pagination,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  hosts: PlatformHost[];
+  empty: string;
+  pagination?: PlatformPagination;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+}) {
+  return (
+    <VirtualTable
+      columns={[
+        { key: "host", label: "Host", width: "1.3fr" },
+        { key: "os", label: "OS", width: "0.9fr" },
+        { key: "ports", label: "Ports", width: "0.5fr", align: "right" },
+        { key: "findings", label: "Findings", width: "0.6fr", align: "right" },
+        { key: "exposure", label: "Exposure", width: "0.6fr" },
+      ]}
+      items={hosts}
+      getKey={(host) => host.ip}
+      empty={empty}
+      pagination={pagination}
+      onPageChange={onPageChange}
+      onPageSizeChange={onPageSizeChange}
+      renderRow={(host) => [
+        <a className="cc-table-link" href={`/app${host.href}`} key={`${host.ip}-host`}>
+          <strong>{host.displayName}</strong>
+          <small>{host.ip} · {host.sourceCount} sources</small>
+        </a>,
+        <span key={`${host.ip}-os`} className="cc-cell-meta">
+          {host.os || "Unknown"}
+        </span>,
+        <strong key={`${host.ip}-ports`} className="cc-cell-strong cc-cell-strong--right">
+          {host.openPorts}
+        </strong>,
+        <strong key={`${host.ip}-findings`} className="cc-cell-strong cc-cell-strong--right">
+          {host.findings}
+        </strong>,
+        <StatusBadge key={`${host.ip}-exposure`} tone={host.exposureTone || "muted"} label={host.exposure} />,
+      ]}
+    />
+  );
+}
+
+function HostPortInventoryTable({ ports }: { ports: HostPortRow[] }) {
+  return (
+    <VirtualTable
+      columns={[
+        { key: "port", label: "Port", width: "0.6fr" },
+        { key: "service", label: "Service", width: "0.9fr" },
+        { key: "product", label: "Product", width: "1fr" },
+        { key: "version", label: "Version", width: "0.8fr" },
+      ]}
+      items={ports}
+      getKey={(port) => `${port.protocol}-${port.port}`}
+      empty="No ports were observed for this host."
+      renderRow={(port) => [
+        <div key={`${port.protocol}-${port.port}-label`}>
+          <strong>{`${port.protocol}/${port.port}`}</strong>
+          <small>{port.state || "observed"}</small>
+        </div>,
+        <span key={`${port.protocol}-${port.port}-service`} className="cc-cell-meta">
+          {port.service || "Unknown"}
+        </span>,
+        <span key={`${port.protocol}-${port.port}-product`} className="cc-cell-meta">
+          {port.product || port.extraInfo || "No product fingerprint"}
+        </span>,
+        <span key={`${port.protocol}-${port.port}-version`} className="cc-cell-meta">
+          {port.version || "No version"}
+        </span>,
+      ]}
+    />
+  );
+}
+
+function PortInventoryTable({
+  ports,
+  empty,
+  pagination,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  ports: PlatformPort[];
+  empty: string;
+  pagination?: PlatformPagination;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+}) {
+  return (
+    <VirtualTable
+      columns={[
+        { key: "port", label: "Port", width: "0.65fr" },
+        { key: "service", label: "Service", width: "1fr" },
+        { key: "hosts", label: "Hosts", width: "0.55fr", align: "right" },
+        { key: "findings", label: "Findings", width: "0.65fr", align: "right" },
+      ]}
+      items={ports}
+      getKey={(port) => `${port.protocol}-${port.port}`}
+      empty={empty}
+      pagination={pagination}
+      onPageChange={onPageChange}
+      onPageSizeChange={onPageSizeChange}
+      renderRow={(port) => [
+        <a className="cc-table-link" href={`/app${port.href}`} key={`${port.protocol}-${port.port}-label`}>
+          <strong>{port.label}</strong>
+          <small>{port.protocol}</small>
+        </a>,
+        <span key={`${port.protocol}-${port.port}-service`} className="cc-cell-meta">
+          {port.service || "Unknown service"}
+        </span>,
+        <strong key={`${port.protocol}-${port.port}-hosts`} className="cc-cell-strong cc-cell-strong--right">
+          {port.hosts}
+        </strong>,
+        <strong key={`${port.protocol}-${port.port}-findings`} className="cc-cell-strong cc-cell-strong--right">
+          {port.findings}
+        </strong>,
+      ]}
+    />
+  );
+}
+
+function FindingGroupTable({
+  findings,
+  slug,
+  empty,
+}: {
+  findings: FindingGroup[];
+  slug: string;
+  empty: string;
+}) {
+  return (
+    <VirtualTable
+      columns={[
+        { key: "finding", label: "Finding", width: "1.15fr" },
+        { key: "severity", label: "Severity", width: "0.55fr" },
+        { key: "hosts", label: "Hosts", width: "0.45fr", align: "right" },
+        { key: "occurrences", label: "Hits", width: "0.45fr", align: "right" },
+      ]}
+      items={findings}
+      getKey={(finding) => finding.id}
+      empty={empty}
+      renderRow={(finding) => [
+        <a className="cc-table-link" href={`/app/engagements/${slug}/findings/${encodeURIComponent(finding.id)}`} key={`${finding.id}-label`}>
+          <strong>{finding.name}</strong>
+          <small>{finding.source} · {finding.templateId || "No template ID"}</small>
+        </a>,
+        <StatusBadge key={`${finding.id}-severity`} tone={finding.severityTone || "muted"} label={finding.severity} />,
+        <strong key={`${finding.id}-hosts`} className="cc-cell-strong cc-cell-strong--right">
+          {finding.hosts}
+        </strong>,
+        <strong key={`${finding.id}-occurrences`} className="cc-cell-strong cc-cell-strong--right">
+          {finding.occurrences}
+        </strong>,
+      ]}
+    />
+  );
+}
+
+function FindingInventoryTable({
+  findings,
+  slug,
+  empty,
+  pagination,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  findings: PlatformFinding[];
+  slug: string;
+  empty: string;
+  pagination?: PlatformPagination;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+}) {
+  return (
+    <VirtualTable
+      columns={[
+        { key: "finding", label: "Finding", width: "1.2fr" },
+        { key: "severity", label: "Severity", width: "0.55fr" },
+        { key: "hosts", label: "Hosts", width: "0.45fr", align: "right" },
+        { key: "occurrences", label: "Hits", width: "0.45fr", align: "right" },
+        { key: "lastSeen", label: "Last seen", width: "0.7fr" },
+      ]}
+      items={findings}
+      getKey={(finding) => finding.id}
+      empty={empty}
+      pagination={pagination}
+      onPageChange={onPageChange}
+      onPageSizeChange={onPageSizeChange}
+      renderRow={(finding) => [
+        <a className="cc-table-link" href={`/app/engagements/${slug}/findings/${encodeURIComponent(finding.id)}`} key={`${finding.id}-label`}>
+          <strong>{finding.name}</strong>
+          <small>{finding.source} · {finding.templateID || "No template ID"}</small>
+        </a>,
+        <StatusBadge key={`${finding.id}-severity`} tone={finding.severityTone || "muted"} label={finding.severity} />,
+        <strong key={`${finding.id}-hosts`} className="cc-cell-strong cc-cell-strong--right">
+          {finding.hosts}
+        </strong>,
+        <strong key={`${finding.id}-occurrences`} className="cc-cell-strong cc-cell-strong--right">
+          {finding.occurrences}
+        </strong>,
+        <span key={`${finding.id}-lastSeen`} className="cc-cell-meta">
+          {finding.lastSeen || "Unknown"}
+        </span>,
+      ]}
+    />
+  );
+}
+
+function RunList({ runs, empty }: { runs: { id: string; toolLabel: string; status: string; statusTone: string; summary: string; createdAt: string; error: string }[]; empty: string }) {
+  return (
+    <List
+      items={runs.map((run) => ({
+        key: run.id,
+        label: `${run.toolLabel} · ${run.status}`,
+        detail: [run.summary || "No summary", run.error || "", run.createdAt].filter(Boolean).join(" · "),
+      }))}
+      empty={empty}
+    />
+  );
+}
+
+function InfoPair({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="cc-info-pair">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function VirtualTable<T>({
+  columns,
+  items,
+  getKey,
+  renderRow,
+  empty,
+  pagination,
+  onPageChange,
+  onPageSizeChange,
+  height = 440,
+  rowHeight = 72,
+}: {
+  columns: Array<{ key: string; label: string; width: string; align?: "left" | "right" }>;
+  items: T[];
+  getKey: (item: T) => string;
+  renderRow: (item: T) => ReactNode[];
+  empty: string;
+  pagination?: PlatformPagination;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+  height?: number;
+  rowHeight?: number;
+}) {
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => rowHeight,
+    overscan: 8,
+  });
+
+  if (items.length === 0) {
+    return <InlineState tone="muted" title="Nothing to show" body={empty} />;
+  }
+
+  const templateColumns = columns.map((column) => column.width).join(" ");
+
+  return (
+    <div className="cc-vtable">
+      <div className="cc-vtable__head" style={{ gridTemplateColumns: templateColumns }}>
+        {columns.map((column) => (
+          <span
+            key={column.key}
+            className={column.align === "right" ? "is-right" : undefined}
+          >
+            {column.label}
+          </span>
+        ))}
+      </div>
+
+      <div className="cc-vtable__body" ref={parentRef} style={{ height }}>
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const item = items[virtualRow.index];
+            const cells = renderRow(item);
+            return (
+              <div
+                className="cc-vtable__row"
+                key={getKey(item)}
+                style={{
+                  gridTemplateColumns: templateColumns,
+                  height: virtualRow.size,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                {cells.map((cell, index) => (
+                  <div
+                    className={columns[index]?.align === "right" ? "is-right" : undefined}
+                    key={index}
+                  >
+                    {cell}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {pagination ? (
+        <PaginationControls
+          pagination={pagination}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function PaginationControls({
+  pagination,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  pagination: PlatformPagination;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+}) {
+  const pageWindow = useMemo(() => {
+    const start = Math.max(1, pagination.page - 2);
+    const end = Math.min(pagination.totalPages, start + 4);
+    const pages: number[] = [];
+    for (let page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+    return pages;
+  }, [pagination.page, pagination.totalPages]);
+
+  return (
+    <div className="cc-pagination">
+      <span>
+        Showing {pagination.start}-{pagination.end} of {pagination.total}
+      </span>
+      <div className="cc-pagination__controls">
+        <button
+          className="cc-button"
+          disabled={!pagination.hasPrev || !onPageChange}
+          onClick={() => onPageChange?.(pagination.page - 1)}
+          type="button"
+        >
+          Previous
+        </button>
+        {pageWindow.map((page) => (
+          <button
+            className={`cc-button ${page === pagination.page ? "cc-button--primary" : ""}`}
+            key={page}
+            disabled={!onPageChange}
+            onClick={() => onPageChange?.(page)}
+            type="button"
+          >
+            {page}
+          </button>
+        ))}
+        <button
+          className="cc-button"
+          disabled={!pagination.hasNext || !onPageChange}
+          onClick={() => onPageChange?.(pagination.page + 1)}
+          type="button"
+        >
+          Next
+        </button>
+        <label className="cc-page-size">
+          <span>Rows</span>
+          <select
+            value={pagination.pageSize}
+            onChange={(event) => onPageSizeChange?.(Number.parseInt(event.target.value, 10))}
+          >
+            {pageSizes.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     </div>
   );

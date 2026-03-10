@@ -116,6 +116,201 @@ export type PlatformFinding = {
   href: string;
 };
 
+export type ExposureSummary = {
+  label: string;
+  tone: string;
+  detail: string;
+  score: number;
+  criticalPorts: string[];
+};
+
+export type CoverageSummary = {
+  level: string;
+  label: string;
+  detail: string;
+  hasScripts: boolean;
+  hasOS: boolean;
+  hasTrace: boolean;
+  needsEnrichment: boolean;
+};
+
+export type HostSummary = {
+  ip: string;
+  displayName: string;
+  hostnames: string[];
+  os: string;
+  sourceCount: number;
+  openPortCount: number;
+  serviceCount: number;
+  scriptCount: number;
+  ports: Array<{ port: string; service: string }>;
+  hiddenPortCount: number;
+  exposure: ExposureSummary;
+  criticalServices: string[];
+  findings: FindingSummary;
+  coverage: CoverageSummary;
+  httpTargets: number;
+};
+
+export type HostPortRow = {
+  port: string;
+  protocol: string;
+  state: string;
+  service: string;
+  product: string;
+  version: string;
+  extraInfo: string;
+  osType: string;
+  method: string;
+  confidence: string;
+  fingerprint: string;
+  cpes: string[];
+  scripts: Array<{ id: string; output: string }>;
+};
+
+export type FindingSummary = {
+  total: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+};
+
+export type FindingGroup = {
+  id: string;
+  templateId: string;
+  name: string;
+  source: string;
+  severity: string;
+  severityTone: string;
+  occurrences: number;
+  hosts: number;
+  ports: number;
+  relatedScans: number;
+  firstSeen: string;
+  lastSeen: string;
+  href: string;
+};
+
+export type HostDetailPayload = {
+  host: {
+    summary: HostSummary;
+    status: string;
+    reason: string;
+    distance: string;
+    closedPortCount: number;
+    ports: HostPortRow[];
+    scriptGroups: Array<{ port: string; service: string; scripts: Array<{ id: string; output: string }> }>;
+    fingerprints: Array<{ port: string; service: string; fingerprint: string }>;
+    portsUsed: Array<{ port: string; protocol: string; state: string }>;
+    osFingerprint: string;
+    osMatches: Array<{
+      name: string;
+      accuracy: string;
+      line: string;
+      type: string;
+      vendor: string;
+      family: string;
+      gen: string;
+      cpes: string[];
+    }>;
+    trace: Array<{ ttl: string; address: string; host: string; rtt: string; weightPct: number }>;
+    timing: { srtt: string; rttVar: string; timeout: string };
+    sourceScans: string[];
+    nucleiTargets: string[];
+    nucleiFindings: Array<{
+      templateId: string;
+      name: string;
+      source: string;
+      severity: string;
+      severityTone: string;
+      target: string;
+      matchedAt: string;
+      type: string;
+      description: string;
+      tags: string[];
+    }>;
+    recommendations: Array<{ title: string; detail: string; evidence: string; tone: string }>;
+    vulnerabilities: Array<{
+      id: string;
+      title: string;
+      severity: string;
+      severityTone: string;
+      detail: string;
+      evidence: string;
+      recommendation: string;
+      referenceUrl: string;
+    }>;
+    tags: string[];
+    notes: Array<{ id: string; text: string; createdAt: string }>;
+    observations: Array<{
+      id: string;
+      at: string;
+      kind: string;
+      kind_tone: string;
+      source: string;
+      host_ip?: string;
+      label: string;
+      detail?: string;
+      severity?: string;
+      href?: string;
+    }>;
+  };
+  relatedZones: PlatformZone[];
+  recentRuns: PlatformRun[];
+  findings: FindingGroup[];
+  portSummary: PlatformPort[];
+};
+
+export type PortHost = {
+  ip: string;
+  displayName: string;
+  os: string;
+  service: string;
+  product: string;
+  version: string;
+  findings: number;
+  scans: string[];
+  href: string;
+};
+
+export type PortDetailPayload = {
+  port: {
+    protocol: string;
+    port: string;
+    label: string;
+    service: string;
+    hostCount: number;
+    findingTotals: FindingSummary;
+    hosts: PortHost[];
+    relatedScans: PlatformSource[];
+    relatedFindings: FindingGroup[];
+    hostTargets: string[];
+  };
+  recentRuns: PlatformRun[];
+};
+
+export type FindingDetailPayload = {
+  finding: {
+    group: FindingGroup;
+    occurrences: Array<{
+      hostIp: string;
+      hostLabel: string;
+      target: string;
+      port: string;
+      scans: string[];
+      matchedAt: string;
+      href: string;
+    }>;
+    relatedScans: PlatformSource[];
+    relatedJobs: PlatformRun[];
+    description: string;
+    tags: string[];
+  };
+  recentRuns: PlatformRun[];
+};
+
 export type PlatformTool = {
   id: string;
   label: string;
@@ -421,6 +616,21 @@ async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+function withSearchParams(
+  path: string,
+  search: Record<string, string | number | undefined>,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(search)) {
+    if (value === undefined || value === "" || Number.isNaN(value)) {
+      continue;
+    }
+    params.set(key, String(value));
+  }
+  const suffix = params.toString();
+  return suffix ? `${path}?${suffix}` : path;
+}
+
 export function sessionQuery() {
   return queryOptions({
     queryKey: ["session"],
@@ -509,47 +719,111 @@ export function engagementSummaryQuery(slug: string) {
   });
 }
 
-export function engagementHostsQuery(slug: string, search: { query?: string; zone?: string }) {
-  const params = new URLSearchParams();
-  if (search.query) {
-    params.set("query", search.query);
-  }
-  if (search.zone) {
-    params.set("zone", search.zone);
-  }
-  const suffix = params.toString() ? `?${params.toString()}` : "";
+export function engagementHostsQuery(
+  slug: string,
+  search: { query?: string; zone?: string; sort?: string; page?: number; pageSize?: number },
+) {
   return queryOptions({
-    queryKey: ["engagement-hosts", slug, search.query || "", search.zone || ""],
-    queryFn: () => requestJSON<ListResponse<PlatformHost>>(`/api/v1/engagements/${slug}/hosts${suffix}`),
+    queryKey: ["engagement-hosts", slug, search.query || "", search.zone || "", search.sort || "", search.page || 1, search.pageSize || 20],
+    queryFn: () =>
+      requestJSON<ListResponse<PlatformHost>>(
+        withSearchParams(`/api/v1/engagements/${slug}/hosts`, {
+          query: search.query,
+          zone: search.zone,
+          sort: search.sort,
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
     staleTime: 15_000,
   });
 }
 
-export function engagementZonesQuery(slug: string) {
+export function engagementHostDetailQuery(slug: string, ip: string) {
   return queryOptions({
-    queryKey: ["engagement-zones", slug],
-    queryFn: () => requestJSON<ListResponse<PlatformZone>>(`/api/v1/engagements/${slug}/zones`),
+    queryKey: ["engagement-host-detail", slug, ip],
+    queryFn: () => requestJSON<HostDetailPayload>(`/api/v1/engagements/${slug}/hosts/${encodeURIComponent(ip)}`),
+    staleTime: 15_000,
+  });
+}
+
+export function engagementZonesQuery(slug: string, search: { sort?: string; page?: number; pageSize?: number } = {}) {
+  return queryOptions({
+    queryKey: ["engagement-zones", slug, search.sort || "", search.page || 1, search.pageSize || 20],
+    queryFn: () =>
+      requestJSON<ListResponse<PlatformZone>>(
+        withSearchParams(`/api/v1/engagements/${slug}/zones`, {
+          sort: search.sort,
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
     staleTime: 30_000,
   });
 }
 
-export function engagementPortsQuery(slug: string, query = "") {
-  const params = new URLSearchParams();
-  if (query) {
-    params.set("query", query);
-  }
-  const suffix = params.toString() ? `?${params.toString()}` : "";
+export function engagementPortsQuery(
+  slug: string,
+  search: { query?: string; sort?: string; page?: number; pageSize?: number } = {},
+) {
   return queryOptions({
-    queryKey: ["engagement-ports", slug, query],
-    queryFn: () => requestJSON<ListResponse<PlatformPort>>(`/api/v1/engagements/${slug}/ports${suffix}`),
+    queryKey: ["engagement-ports", slug, search.query || "", search.sort || "", search.page || 1, search.pageSize || 20],
+    queryFn: () =>
+      requestJSON<ListResponse<PlatformPort>>(
+        withSearchParams(`/api/v1/engagements/${slug}/ports`, {
+          query: search.query,
+          sort: search.sort,
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
     staleTime: 15_000,
   });
 }
 
-export function engagementFindingsQuery(slug: string) {
+export function engagementPortDetailQuery(slug: string, protocol: string, port: string) {
   return queryOptions({
-    queryKey: ["engagement-findings", slug],
-    queryFn: () => requestJSON<ListResponse<PlatformFinding>>(`/api/v1/engagements/${slug}/findings`),
+    queryKey: ["engagement-port-detail", slug, protocol, port],
+    queryFn: () =>
+      requestJSON<PortDetailPayload>(
+        `/api/v1/engagements/${slug}/ports/${encodeURIComponent(protocol)}/${encodeURIComponent(port)}`,
+      ),
+    staleTime: 15_000,
+  });
+}
+
+export function engagementFindingsQuery(
+  slug: string,
+  search: { query?: string; severity?: string; sort?: string; page?: number; pageSize?: number } = {},
+) {
+  return queryOptions({
+    queryKey: [
+      "engagement-findings",
+      slug,
+      search.query || "",
+      search.severity || "",
+      search.sort || "",
+      search.page || 1,
+      search.pageSize || 20,
+    ],
+    queryFn: () =>
+      requestJSON<ListResponse<PlatformFinding>>(
+        withSearchParams(`/api/v1/engagements/${slug}/findings`, {
+          query: search.query,
+          severity: search.severity,
+          sort: search.sort,
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
+    staleTime: 15_000,
+  });
+}
+
+export function engagementFindingDetailQuery(slug: string, groupID: string) {
+  return queryOptions({
+    queryKey: ["engagement-finding-detail", slug, groupID],
+    queryFn: () => requestJSON<FindingDetailPayload>(`/api/v1/engagements/${slug}/findings/${encodeURIComponent(groupID)}`),
     staleTime: 15_000,
   });
 }

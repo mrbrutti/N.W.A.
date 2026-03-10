@@ -498,6 +498,146 @@ code {
   font-size: 0.82rem;
 }
 
+.cc-pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cc-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 4px;
+}
+
+.cc-page-size span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.cc-page-size select {
+  min-width: 74px;
+}
+
+.cc-toolbar--compact {
+  margin-bottom: 14px;
+}
+
+.cc-vtable {
+  display: grid;
+  gap: 12px;
+}
+
+.cc-vtable__head,
+.cc-vtable__row {
+  display: grid;
+  gap: 12px;
+}
+
+.cc-vtable__head {
+  padding: 0 12px;
+  color: var(--muted);
+  font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.cc-vtable__head span.is-right,
+.cc-vtable__row div.is-right {
+  text-align: right;
+  justify-self: end;
+}
+
+.cc-vtable__body {
+  position: relative;
+  overflow: auto;
+  border: 1px solid rgba(166, 185, 194, 0.1);
+  border-radius: 18px;
+  background: rgba(9, 17, 22, 0.34);
+}
+
+.cc-vtable__row {
+  position: absolute;
+  inset-inline: 0;
+  padding: 12px;
+  align-items: center;
+  border-bottom: 1px solid rgba(166, 185, 194, 0.08);
+  background: rgba(14, 24, 30, 0.78);
+}
+
+.cc-table-link {
+  display: grid;
+  gap: 4px;
+  color: inherit;
+  text-align: left;
+}
+
+button.cc-table-link {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cc-table-link.is-active strong,
+.cc-table-link:hover strong {
+  color: var(--accent);
+}
+
+.cc-table-link strong,
+.cc-table-link small {
+  display: block;
+}
+
+.cc-table-link small,
+.cc-cell-meta {
+  color: var(--muted);
+}
+
+.cc-cell-meta {
+  display: block;
+  line-height: 1.35;
+}
+
+.cc-cell-strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 28px;
+}
+
+.cc-cell-strong--right {
+  justify-content: flex-end;
+}
+
+.cc-detail-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.cc-info-pair {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(166, 185, 194, 0.08);
+}
+
+.cc-info-pair span {
+  color: var(--muted);
+  font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .cc-badge {
   display: inline-flex;
   align-items: center;

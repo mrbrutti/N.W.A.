@@ -530,6 +530,135 @@ func TestAdminGetRoutesRedirectToReactShell(t *testing.T) {
 	}
 }
 
+func TestEngagementInventoryRoutesRedirectAndDetailJSON(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Setenv("NWA_ADMIN_PASSWORD", "adminpass")
+	app, err := newApplicationWithConfig(applicationConfig{
+		SeedFiles:       []string{writeSnapshotFixture(t)},
+		DBDSN:           filepath.Join(t.TempDir(), "service.sqlite"),
+		DataDir:         filepath.Join(t.TempDir(), "data"),
+		WorkspaceTarget: "engagement-alpha",
+	}, logger)
+	if err != nil {
+		t.Fatalf("newApplicationWithConfig() error = %v", err)
+	}
+
+	handler, err := app.routes()
+	if err != nil {
+		t.Fatalf("routes() error = %v", err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookiejar.New() error = %v", err)
+	}
+	client := &http.Client{
+		Jar: jar,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	if _, err := client.PostForm(server.URL+"/login", url.Values{
+		"login":    {"admin"},
+		"password": {"adminpass"},
+	}); err != nil {
+		t.Fatalf("login request error = %v", err)
+	}
+
+	job := &pluginJob{ID: "job-1", PluginID: "nuclei", PluginLabel: "Nuclei HTTP Enrichment"}
+	result := PluginRunResult{
+		NucleiFindings: map[string][]storedNucleiFinding{
+			"10.0.0.9": {{
+				TemplateID: "http-missing-header",
+				Name:       "Missing security header",
+				Severity:   "medium",
+				Target:     "http://10.0.0.9",
+				MatchedAt:  "http://10.0.0.9",
+				Type:       "http",
+			}},
+		},
+		Findings: FindingSummary{Total: 1, Medium: 1},
+	}
+	if err := app.workspace.applyPluginResult(job, result); err != nil {
+		t.Fatalf("applyPluginResult() error = %v", err)
+	}
+
+	engagement, err := app.platform.store.engagementByWorkspaceID(app.workspace.id)
+	if err != nil {
+		t.Fatalf("engagementByWorkspaceID() error = %v", err)
+	}
+	if err := app.platform.syncEngagement(engagement); err != nil {
+		t.Fatalf("syncEngagement() error = %v", err)
+	}
+
+	checkJSON := func(path string) map[string]any {
+		t.Helper()
+		response, err := client.Get(server.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s error = %v", path, err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want %d", path, response.StatusCode, http.StatusOK)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode %s error = %v", path, err)
+		}
+		return payload
+	}
+
+	hostPayload := checkJSON("/api/v1/engagements/engagement-alpha/hosts/10.0.0.9")
+	if _, ok := hostPayload["host"]; !ok {
+		t.Fatalf("host detail payload missing host: %#v", hostPayload)
+	}
+
+	portPayload := checkJSON("/api/v1/engagements/engagement-alpha/ports/tcp/80")
+	if _, ok := portPayload["port"]; !ok {
+		t.Fatalf("port detail payload missing port: %#v", portPayload)
+	}
+
+	groupID := ""
+	for _, item := range app.workspace.findingGroups() {
+		if item.TemplateID == "http-missing-header" {
+			groupID = item.ID
+			break
+		}
+	}
+	if groupID == "" {
+		t.Fatal("failed to derive finding group id from workspace")
+	}
+	findingPayload := checkJSON("/api/v1/engagements/engagement-alpha/findings/" + url.PathEscape(groupID))
+	if _, ok := findingPayload["finding"]; !ok {
+		t.Fatalf("finding detail payload missing finding: %#v", findingPayload)
+	}
+
+	for path, want := range map[string]string{
+		"/engagements/engagement-alpha/zones":               "/app/engagements/engagement-alpha/zones",
+		"/engagements/engagement-alpha/hosts":               "/app/engagements/engagement-alpha/hosts",
+		"/engagements/engagement-alpha/hosts/10.0.0.9":      "/app/engagements/engagement-alpha/hosts/10.0.0.9",
+		"/engagements/engagement-alpha/ports":               "/app/engagements/engagement-alpha/ports",
+		"/engagements/engagement-alpha/ports/tcp/80":        "/app/engagements/engagement-alpha/ports/tcp/80",
+		"/engagements/engagement-alpha/findings":            "/app/engagements/engagement-alpha/findings",
+		"/engagements/engagement-alpha/findings/" + groupID: "/app/engagements/engagement-alpha/findings/" + groupID,
+	} {
+		response, err := client.Get(server.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s error = %v", path, err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusSeeOther {
+			t.Fatalf("GET %s status = %d, want %d", path, response.StatusCode, http.StatusSeeOther)
+		}
+		if location := response.Header.Get("Location"); location != want {
+			t.Fatalf("GET %s Location = %q, want %q", path, location, want)
+		}
+	}
+}
+
 func TestScopeKickoffCreatesChunksAndApproval(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	app, err := newApplicationWithConfig(applicationConfig{

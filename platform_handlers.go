@@ -314,6 +314,11 @@ func (app *application) handleEngagementRouter(writer http.ResponseWriter, reque
 		return
 	}
 	if request.Method == http.MethodGet {
+		switch section {
+		case "zones", "hosts", "ports", "findings":
+			app.handleEngagementReactRedirect(writer, request)
+			return
+		}
 		_ = app.platform.syncEngagement(engagement)
 	}
 
