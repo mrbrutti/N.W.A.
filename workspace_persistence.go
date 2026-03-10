@@ -8,6 +8,8 @@ type workspaceStateStore interface {
 	appendEvent(event workspaceEvent) error
 	loadJobs() ([]*pluginJob, error)
 	saveJobs(jobs []*pluginJob) error
+	upsertJob(job *pluginJob) error
+	claimQueuedJobs(workerID string, limit int, leaseUntil string) ([]*pluginJob, error)
 	loadPreferences() (workspacePreferences, error)
 	savePreferences(preferences workspacePreferences) error
 	toolCommandTemplate(pluginID string) (string, error)

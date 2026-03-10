@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -357,6 +358,106 @@ func (s *workspaceStore) appendEvent(event workspaceEvent) error {
 
 func (s *workspaceStore) loadJobs() ([]*pluginJob, error) {
 	return loadJSONRows[*pluginJob](s.db, `SELECT payload_json FROM jobs ORDER BY created_at ASC`)
+}
+
+func (s *workspaceStore) upsertJob(job *pluginJob) error {
+	if job == nil {
+		return errors.New("nil job")
+	}
+	payload, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(
+		`INSERT INTO jobs(id, created_at, payload_json) VALUES(?, ?, ?) ON CONFLICT(id) DO UPDATE SET created_at=excluded.created_at, payload_json=excluded.payload_json`,
+		job.ID,
+		job.CreatedAt,
+		string(payload),
+	)
+	return err
+}
+
+func (s *workspaceStore) claimQueuedJobs(workerID string, limit int, leaseUntil string) ([]*pluginJob, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rows, err := tx.Query(`SELECT id, payload_json FROM jobs ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	type jobRow struct {
+		id      string
+		payload string
+	}
+	jobRows := make([]jobRow, 0)
+	for rows.Next() {
+		var row jobRow
+		if err := rows.Scan(&row.id, &row.payload); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		jobRows = append(jobRows, row)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	claimed := make([]*pluginJob, 0, maxInt(limit, 1))
+	for _, row := range jobRows {
+		if limit > 0 && len(claimed) >= limit {
+			break
+		}
+
+		var job pluginJob
+		if err := json.Unmarshal([]byte(row.payload), &job); err != nil {
+			return nil, err
+		}
+		if !jobClaimable(&job, now) {
+			continue
+		}
+
+		job.Status = jobRunning
+		job.WorkerMode = chooseString(strings.TrimSpace(job.WorkerMode), "central")
+		job.WorkerID = chooseString(strings.TrimSpace(job.WorkerID), workerID)
+		job.LeaseOwner = workerID
+		job.LeaseExpiresAt = leaseUntil
+		job.UpdatedAt = now
+		if strings.TrimSpace(job.StartedAt) == "" {
+			job.StartedAt = now
+		}
+
+		newPayload, marshalErr := json.Marshal(&job)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		result, execErr := tx.Exec(`UPDATE jobs SET payload_json = ? WHERE id = ? AND payload_json = ?`, string(newPayload), row.id, row.payload)
+		if execErr != nil {
+			return nil, execErr
+		}
+		affected, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return nil, rowsErr
+		}
+		if affected == 0 {
+			continue
+		}
+		claimed = append(claimed, cloneJob(&job))
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return claimed, nil
 }
 
 func (s *workspaceStore) loadPreferences() (workspacePreferences, error) {

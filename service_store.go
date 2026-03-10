@@ -644,6 +644,109 @@ func (s *serviceWorkspaceStore) loadJobs() ([]*pluginJob, error) {
 	return loadServiceJSONRows[*pluginJob](s, "jobs")
 }
 
+func (s *serviceWorkspaceStore) upsertJob(job *pluginJob) error {
+	if job == nil {
+		return errors.New("nil job")
+	}
+	payload, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	query := `INSERT INTO jobs(workspace_id, id, created_at, payload_json) VALUES(` + s.service.placeholder(1) + `, ` + s.service.placeholder(2) + `, ` + s.service.placeholder(3) + `, ` + s.service.placeholder(4) + `)`
+	if s.service.driver == "pgx" {
+		query += ` ON CONFLICT(workspace_id, id) DO UPDATE SET created_at=EXCLUDED.created_at, payload_json=EXCLUDED.payload_json`
+	} else {
+		query += ` ON CONFLICT(workspace_id, id) DO UPDATE SET created_at=excluded.created_at, payload_json=excluded.payload_json`
+	}
+	_, err = s.service.db.Exec(query, s.workspaceID, job.ID, job.CreatedAt, string(payload))
+	return err
+}
+
+func (s *serviceWorkspaceStore) claimQueuedJobs(workerID string, limit int, leaseUntil string) ([]*pluginJob, error) {
+	tx, err := s.service.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	query := `SELECT id, payload_json FROM jobs WHERE workspace_id = ` + s.service.placeholder(1) + ` ORDER BY created_at ASC`
+	rows, err := tx.Query(query, s.workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	type jobRow struct {
+		id      string
+		payload string
+	}
+	jobRows := make([]jobRow, 0)
+	for rows.Next() {
+		var row jobRow
+		if err := rows.Scan(&row.id, &row.payload); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		jobRows = append(jobRows, row)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	claimed := make([]*pluginJob, 0, maxInt(limit, 1))
+	for _, row := range jobRows {
+		if limit > 0 && len(claimed) >= limit {
+			break
+		}
+
+		var job pluginJob
+		if err := json.Unmarshal([]byte(row.payload), &job); err != nil {
+			return nil, err
+		}
+		if !jobClaimable(&job, now) {
+			continue
+		}
+
+		job.Status = jobRunning
+		job.WorkerMode = chooseString(strings.TrimSpace(job.WorkerMode), "central")
+		job.WorkerID = chooseString(strings.TrimSpace(job.WorkerID), workerID)
+		job.LeaseOwner = workerID
+		job.LeaseExpiresAt = leaseUntil
+		job.UpdatedAt = now
+		if strings.TrimSpace(job.StartedAt) == "" {
+			job.StartedAt = now
+		}
+
+		newPayload, marshalErr := json.Marshal(&job)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		updateQuery := `UPDATE jobs SET payload_json = ` + s.service.placeholder(1) + ` WHERE workspace_id = ` + s.service.placeholder(2) + ` AND id = ` + s.service.placeholder(3) + ` AND payload_json = ` + s.service.placeholder(4)
+		result, execErr := tx.Exec(updateQuery, string(newPayload), s.workspaceID, row.id, row.payload)
+		if execErr != nil {
+			return nil, execErr
+		}
+		affected, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return nil, rowsErr
+		}
+		if affected == 0 {
+			continue
+		}
+		claimed = append(claimed, cloneJob(&job))
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return claimed, nil
+}
+
 func (s *serviceWorkspaceStore) saveJobs(jobs []*pluginJob) error {
 	tx, err := s.service.db.Begin()
 	if err != nil {

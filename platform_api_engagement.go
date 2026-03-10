@@ -29,10 +29,11 @@ func (app *application) handleEngagementSummaryJSON(writer http.ResponseWriter, 
 }
 
 func (app *application) handleEngagementScopeJSON(writer http.ResponseWriter, request *http.Request) {
-	context, ok := app.requireAPIEngagementContext(writer, request, false)
+	context, ok := app.requireAPIEngagementContext(writer, request, true)
 	if !ok {
 		return
 	}
+	_ = app.platform.syncEngagement(context.Engagement)
 	stats, err := app.platform.store.engagementStats(context.Engagement.ID)
 	if err != nil {
 		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -149,10 +150,11 @@ func (app *application) handleEngagementSourcesJSON(writer http.ResponseWriter, 
 }
 
 func (app *application) handleEngagementRunsJSON(writer http.ResponseWriter, request *http.Request) {
-	context, ok := app.requireAPIEngagementContext(writer, request, false)
+	context, ok := app.requireAPIEngagementContext(writer, request, true)
 	if !ok {
 		return
 	}
+	_ = app.platform.syncEngagement(context.Engagement)
 	items, err := app.platform.store.listEngagementRuns(context.Engagement.ID, 0)
 	if err != nil {
 		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -166,6 +168,7 @@ func (app *application) handleEngagementCampaignsJSON(writer http.ResponseWriter
 	if !ok {
 		return
 	}
+	_ = app.platform.syncEngagement(context.Engagement)
 	stats, err := app.platform.store.engagementStats(context.Engagement.ID)
 	if err != nil {
 		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -247,7 +250,7 @@ func (app *application) handleEngagementSettingsJSON(writer http.ResponseWriter,
 }
 
 func (app *application) handleEngagementEventsSSE(writer http.ResponseWriter, request *http.Request) {
-	context, ok := app.requireAPIEngagementContext(writer, request, false)
+	context, ok := app.requireAPIEngagementContext(writer, request, true)
 	if !ok {
 		return
 	}
@@ -259,8 +262,13 @@ func (app *application) handleEngagementEventsSSE(writer http.ResponseWriter, re
 	writer.Header().Set("Content-Type", "text/event-stream")
 	writer.Header().Set("Cache-Control", "no-cache")
 	writer.Header().Set("Connection", "keep-alive")
+	events, cancel := context.Workspace.plugins.subscribe()
+	defer cancel()
 
 	send := func() bool {
+		if app.platform != nil {
+			_ = app.platform.syncEngagement(context.Engagement)
+		}
 		stats, err := app.platform.store.engagementStats(context.Engagement.ID)
 		if err != nil {
 			http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -286,16 +294,22 @@ func (app *application) handleEngagementEventsSSE(writer http.ResponseWriter, re
 		return
 	}
 
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	keepAlive := time.NewTicker(30 * time.Second)
+	defer keepAlive.Stop()
 	for {
 		select {
 		case <-request.Context().Done():
 			return
-		case <-ticker.C:
+		case <-events:
+			for len(events) > 0 {
+				<-events
+			}
 			if !send() {
 				return
 			}
+		case <-keepAlive.C:
+			_, _ = writer.Write([]byte(": keep-alive\n\n"))
+			flusher.Flush()
 		}
 	}
 }

@@ -50,6 +50,28 @@ func installFakeTool(t *testing.T, dir string, name string) {
 	}
 }
 
+func readSSEEvent(reader *bufio.Reader) (string, error) {
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "event: ") {
+			eventType := strings.TrimSpace(strings.TrimPrefix(trimmed, "event: "))
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					return "", err
+				}
+				if strings.TrimSpace(line) == "" {
+					return eventType, nil
+				}
+			}
+		}
+	}
+}
+
 func TestServiceModeRootRedirectsToLogin(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	t.Setenv("NWA_ADMIN_PASSWORD", "adminpass")
@@ -315,12 +337,95 @@ func TestPlatformEngagementJSONResources(t *testing.T) {
 		t.Fatalf("events content type = %q, want text/event-stream", contentType)
 	}
 	reader := bufio.NewReader(eventResponse.Body)
-	line, err := reader.ReadString('\n')
+	eventType, err := readSSEEvent(reader)
 	if err != nil {
-		t.Fatalf("read event line error = %v", err)
+		t.Fatalf("readSSEEvent() error = %v", err)
 	}
-	if got := strings.TrimSpace(line); got != "event: engagement.snapshot" {
-		t.Fatalf("event line = %q, want engagement.snapshot", got)
+	if eventType != "engagement.snapshot" {
+		t.Fatalf("event type = %q, want engagement.snapshot", eventType)
+	}
+}
+
+func TestPlatformEngagementEventsPushOnJobUpdates(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Setenv("NWA_ADMIN_PASSWORD", "adminpass")
+	app, err := newApplicationWithConfig(applicationConfig{
+		DBDSN:           filepath.Join(t.TempDir(), "service.sqlite"),
+		DataDir:         filepath.Join(t.TempDir(), "data"),
+		WorkspaceTarget: "engagement-alpha",
+	}, logger)
+	if err != nil {
+		t.Fatalf("newApplicationWithConfig() error = %v", err)
+	}
+
+	handler, err := app.routes()
+	if err != nil {
+		t.Fatalf("routes() error = %v", err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookiejar.New() error = %v", err)
+	}
+	client := &http.Client{
+		Jar: jar,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	loginResponse, err := client.PostForm(server.URL+"/login", url.Values{
+		"login":    {"admin"},
+		"password": {"adminpass"},
+	})
+	if err != nil {
+		t.Fatalf("login request error = %v", err)
+	}
+	_ = loginResponse.Body.Close()
+
+	workspace := app.workspace
+	engagement, err := app.platform.store.engagementByWorkspaceID(workspace.id)
+	if err != nil {
+		t.Fatalf("engagementByWorkspaceID() error = %v", err)
+	}
+	workspace.plugins.mu.Lock()
+	workspace.plugins.plugins["fake-manual"] = fakePlugin{id: "fake-manual", label: "Fake Manual"}
+	workspace.plugins.mu.Unlock()
+
+	eventResponse, err := client.Get(server.URL + "/api/v1/engagements/" + engagement.Slug + "/events")
+	if err != nil {
+		t.Fatalf("GET events error = %v", err)
+	}
+	defer eventResponse.Body.Close()
+
+	reader := bufio.NewReader(eventResponse.Body)
+	if _, err := readSSEEvent(reader); err != nil {
+		t.Fatalf("initial readSSEEvent() error = %v", err)
+	}
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := readSSEEvent(reader)
+		result <- err
+	}()
+
+	if _, err := workspace.plugins.submitDetailed(pluginSubmission{
+		PluginID:   "fake-manual",
+		RawTargets: []string{"198.51.100.25"},
+		Summary:    "Manual follow-up",
+	}); err != nil {
+		t.Fatalf("submitDetailed() error = %v", err)
+	}
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("second readSSEEvent() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected job update to trigger SSE event without polling delay")
 	}
 }
 
