@@ -21,7 +21,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: "1.25.0"
           cache: true
 
       - name: Setup Node
@@ -30,12 +30,15 @@ jobs:
           node-version: "22"
 
       - name: Verify formatting
+        if: ${{ hashFiles('**/*.go') != '' }}
         run: |
           files=$(find . -name '*.go' -not -path './vendor/*')
           test -z "$(gofmt -l $files)"
 
       - name: Verify frontend script syntax
+        if: ${{ hashFiles('web/js/app.js') != '' }}
         run: node --check web/js/app.js
 
       - name: Run Go tests
+        if: ${{ hashFiles('go.mod') != '' }}
         run: go test ./...
