@@ -239,6 +239,52 @@ func (app *application) handleAdminToolJSON(writer http.ResponseWriter, request 
 			}
 		}
 		http.NotFound(writer, request)
+	case http.MethodPatch:
+		defer request.Body.Close()
+		var payload struct {
+			CommandTemplate string `json:"commandTemplate"`
+			Reset           bool   `json:"reset"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			http.Error(writer, "invalid JSON payload", http.StatusBadRequest)
+			return
+		}
+		tools, err := app.platform.store.listTools()
+		if err != nil {
+			http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		for _, tool := range tools {
+			if tool.ID != toolID {
+				continue
+			}
+			if !tool.CommandEditable {
+				http.Error(writer, "tool command cannot be edited", http.StatusBadRequest)
+				return
+			}
+			template := strings.TrimSpace(payload.CommandTemplate)
+			if payload.Reset || template == strings.TrimSpace(tool.DefaultCommandTemplate) {
+				template = ""
+			}
+			if err := app.platform.store.updateToolCommandTemplate(toolID, template); err != nil {
+				http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+			updated, err := app.platform.store.listTools()
+			if err != nil {
+				http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+			for _, item := range updated {
+				if item.ID == toolID {
+					writeJSON(writer, http.StatusOK, item)
+					return
+				}
+			}
+			http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		http.NotFound(writer, request)
 	case http.MethodDelete:
 		tools, err := app.platform.store.listTools()
 		if err != nil {

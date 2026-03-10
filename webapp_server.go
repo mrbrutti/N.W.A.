@@ -31,3 +31,11 @@ func (app *application) handleReactApp(writer http.ResponseWriter, request *http
 	}
 	http.ServeFile(writer, request, indexPath)
 }
+
+func (app *application) handleAdminReactRedirect(writer http.ResponseWriter, request *http.Request) {
+	target := "/app" + request.URL.Path
+	if request.URL.RawQuery != "" {
+		target += "?" + request.URL.RawQuery
+	}
+	http.Redirect(writer, request, target, http.StatusSeeOther)
+}
