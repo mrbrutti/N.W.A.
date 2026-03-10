@@ -1,0 +1,339 @@
+{{define "platform_admin_overview"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Platform health</p>
+    <h2>Control plane posture</h2>
+    <div class="platform-health-grid">
+      <div><span>Users</span><strong>{{.Health.UserCount}}</strong></div>
+      <div><span>Engagements</span><strong>{{.Health.EngagementCount}}</strong></div>
+      <div><span>Workers</span><strong>{{.Health.LiveWorkers}} / {{.Health.WorkerCount}}</strong></div>
+      <div><span>Tools ready</span><strong>{{.Health.ReadyTools}} / {{.Health.ToolCount}}</strong></div>
+      <div><span>Connectors</span><strong>{{.Health.ConfiguredConnectors}} / {{.Health.ConnectorCount}}</strong></div>
+      <div><span>Queue</span><strong>{{.Health.RunningRuns}} running · {{.Health.QueuedRuns}} queued</strong></div>
+    </div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Workers</p>
+    <h2>Execution plane</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Worker</th><th>Mode</th><th>Status</th><th>Last seen</th></tr>
+      </thead>
+      <tbody>
+        {{range .Workers}}
+        <tr>
+          <td><strong>{{.Label}}</strong><small>{{.Detail}}</small></td>
+          <td>{{.Mode}} · {{.Zone}}</td>
+          <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+          <td>{{.LastSeenAt}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">No workers registered.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "workers")}}
+  </article>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Engagements</p>
+        <h2>Live missions</h2>
+      </div>
+      <a class="platform-inline-link" href="/admin/engagements">Open registry</a>
+    </div>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Name</th><th>Members</th><th>Hosts</th><th>Findings</th><th>Running</th></tr>
+      </thead>
+      <tbody>
+        {{range .Engagements}}
+        <tr>
+          <td><a href="{{.OverviewHref}}"><strong>{{.Name}}</strong></a><small>{{.ScopeSummary}}</small></td>
+          <td>{{.MemberCount}}</td>
+          <td>{{.HostCount}}</td>
+          <td>{{.FindingCount}}</td>
+          <td>{{.RunningRuns}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5">No engagements created yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "engagements")}}
+  </article>
+
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Audit</p>
+        <h2>Recent changes</h2>
+      </div>
+      <a class="platform-inline-link" href="/admin/users">Manage access</a>
+    </div>
+    <table class="platform-table">
+      <thead>
+        <tr><th>When</th><th>Actor</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentAudit}}
+        <tr><td>{{.CreatedAt}}</td><td>{{.ActorLabel}}</td><td>{{.Summary}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No audit events yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "audit")}}
+  </article>
+</section>
+
+<section class="platform-panel">
+  <div class="platform-panel__head">
+    <div>
+      <p class="platform-kicker">Tooling</p>
+      <h2>Managed command inventory</h2>
+    </div>
+    <a class="platform-inline-link" href="/admin/tools">Open tools</a>
+  </div>
+  <table class="platform-table">
+    <thead>
+      <tr><th>Tool</th><th>Kind</th><th>Status</th><th>Profile</th><th>Capabilities</th></tr>
+    </thead>
+    <tbody>
+      {{range .Tools}}
+      <tr>
+        <td><strong>{{.Label}}</strong><small>{{.Description}}</small></td>
+        <td>{{.Kind}} · {{.Family}}</td>
+        <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+        <td>{{.SafetyClass}} · {{.CostProfile}}</td>
+        <td>{{join .Capabilities ", "}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="5">No tools registered.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "platform_pagination" (index .Pagers "tools")}}
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_admin_users"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid sidebar-layout">
+  <article class="platform-panel">
+    <p class="platform-kicker">Create user</p>
+    <h2>New account</h2>
+    <form method="post" action="/admin/users" class="platform-form-grid">
+      <label><span>Username</span><input type="text" name="username" required></label>
+      <label><span>Email</span><input type="email" name="email" required></label>
+      <label><span>Display name</span><input type="text" name="display_name"></label>
+      <label><span>Password</span><input type="password" name="password" required></label>
+      <label class="platform-checkbox"><input type="checkbox" name="admin"> Platform admin</label>
+      <button type="submit" class="platform-primary-button">Create user</button>
+    </form>
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Accounts</p>
+    <h2>Platform users</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>User</th><th>Role</th><th>Status</th><th>Last login</th></tr>
+      </thead>
+      <tbody>
+        {{range .Users}}
+        <tr>
+          <td><strong>{{.DisplayName}}</strong><small>{{.Username}} · {{.Email}}</small></td>
+          <td>{{.Role}}</td>
+          <td>{{.Status}}</td>
+          <td>{{.LastLoginAt}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">No users available.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "users")}}
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_admin_engagements"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid sidebar-layout">
+  <article class="platform-panel">
+    <p class="platform-kicker">Create engagement</p>
+    <h2>Kick off new scope</h2>
+    <form method="post" action="/admin/engagements" class="platform-form-grid">
+      <label><span>Name</span><input type="text" name="name" required></label>
+      <label><span>Description</span><input type="text" name="description"></label>
+      <label class="platform-span-all"><span>Initial scope</span><textarea name="scope" rows="10" placeholder="CIDRs, IPs, domains, or hostnames"></textarea></label>
+      <button type="submit" class="platform-primary-button">Create engagement</button>
+    </form>
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Registry</p>
+    <h2>Engagements</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Name</th><th>Scope</th><th>Members</th><th>Hosts</th><th>Findings</th><th>Updated</th></tr>
+      </thead>
+      <tbody>
+        {{range .Engagements}}
+        <tr>
+          <td><a href="{{.OverviewHref}}"><strong>{{.Name}}</strong></a><small>{{.Description}}</small></td>
+          <td>{{.ScopeSummary}}</td>
+          <td>{{.MemberCount}}</td>
+          <td>{{.HostCount}}</td>
+          <td>{{.FindingCount}}</td>
+          <td>{{.UpdatedAt}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="6">No engagements created yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "engagements")}}
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_admin_tools"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Tools</p>
+    <h2>Managed commands</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Tool</th><th>Kind</th><th>Status</th><th>Command</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {{range .Tools}}
+        <tr>
+          <td><strong>{{.Label}}</strong><small>{{.Family}} · {{.SafetyClass}} · {{.CostProfile}} · {{.InstallSource}} · {{.TargetStrategy}}</small></td>
+          <td>{{.Kind}}</td>
+          <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+          <td>
+            {{if .CommandEditable}}
+            <strong>{{if .CommandTemplate}}Custom{{else}}Default{{end}}</strong>
+            <small><code>{{.ResolvedCommandTemplate}}</code></small>
+            {{else}}
+            <small>Not editable</small>
+            {{end}}
+          </td>
+          <td>{{.StatusDetail}}{{if .Profiles}}<small>{{len .Profiles}} profiles</small>{{end}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5">No tools registered.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "tools")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Connectors</p>
+    <h2>External platforms</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Connector</th><th>Status</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {{range .Connectors}}
+        <tr>
+          <td>{{.Label}}</td>
+          <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+          <td>{{.StatusDetail}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="3">No connectors registered.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "connectors")}}
+  </article>
+</section>
+
+<section class="platform-panel">
+  <p class="platform-kicker">Workers</p>
+  <h2>Execution capacity</h2>
+  <table class="platform-table">
+    <thead>
+      <tr><th>Worker</th><th>Mode</th><th>Zone</th><th>Status</th><th>Last seen</th></tr>
+    </thead>
+    <tbody>
+      {{range .Workers}}
+      <tr>
+        <td><strong>{{.Label}}</strong><small>{{.Detail}}</small></td>
+        <td>{{.Mode}}</td>
+        <td>{{.Zone}}</td>
+        <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+        <td>{{.LastSeenAt}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="5">No workers registered.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "platform_pagination" (index .Pagers "workers")}}
+</section>
+
+<section class="platform-panel">
+  <div class="platform-panel__head">
+    <div>
+      <p class="platform-kicker">CLI commands</p>
+      <h2>Edit managed command templates</h2>
+    </div>
+    <span class="platform-note">Use <code>{{"{{binary}}"}}</code> and <code>{{"{{args}}"}}</code></span>
+  </div>
+  <p class="platform-subtitle">Custom managed tools can also be installed through <code>/api/v1/admin/tools</code>. See <code>docs/tool-install-api.md</code> and <code>scripts/install_tool.go</code>.</p>
+  <div class="policy-grid">
+    {{range .Tools}}
+    {{if .CommandEditable}}
+    <article class="policy-card" id="tool-{{.ID}}">
+      <div class="policy-card__head">
+        <div>
+          <strong>{{.Label}}</strong>
+          <small>{{.Description}}</small>
+        </div>
+        <span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span>
+      </div>
+      <form method="post" action="/admin/tools" class="platform-form-grid">
+        <input type="hidden" name="action" value="update_tool_command">
+        <input type="hidden" name="tool_id" value="{{.ID}}">
+        <label class="platform-span-all">
+          <span>Command template</span>
+          <textarea name="command_template" rows="4">{{.ResolvedCommandTemplate}}</textarea>
+        </label>
+        <label class="platform-span-all">
+          <span>Default</span>
+          <input type="text" value="{{.DefaultCommandTemplate}}" readonly>
+        </label>
+        <button class="platform-primary-button" type="submit">Save command</button>
+      </form>
+      <form method="post" action="/admin/tools" class="platform-inline-form">
+        <input type="hidden" name="action" value="reset_tool_command">
+        <input type="hidden" name="tool_id" value="{{.ID}}">
+        <button class="platform-ghost-button" type="submit">Reset to default</button>
+      </form>
+    </article>
+    {{end}}
+    {{else}}
+    <article class="policy-card">
+      <strong>No editable CLI tools</strong>
+      <small>Only managed command tools expose editable command templates.</small>
+    </article>
+    {{end}}
+  </div>
+</section>
+{{template "platform_page_end" .}}
+{{end}}

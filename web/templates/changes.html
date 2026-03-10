@@ -1,0 +1,116 @@
+{{define "changes"}}
+{{template "shell_start" .}}
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Compare checkpoints</p><h2>Change window</h2></div>
+      </div>
+      <form class="inline-form" action="/changes" method="get">
+        <select name="from">
+          {{range .Compare.FromOptions}}
+          <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+          {{end}}
+        </select>
+        <select name="to">
+          {{range .Compare.ToOptions}}
+          <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+          {{end}}
+        </select>
+        <button type="submit">Compare</button>
+      </form>
+      {{if .HasHistory}}
+      <p class="summary-line">{{.Diff.SummaryLine}}</p>
+      {{else}}
+      <p class="muted">No diff history is available yet.</p>
+      {{end}}
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Campaign</p><h2>Queue follow-up</h2></div>
+      </div>
+      <form class="stack-form" action="/campaigns/create" method="post">
+        <input type="hidden" name="from" value="{{.Compare.FromID}}">
+        <input type="hidden" name="to" value="{{.Compare.ToID}}">
+        <input type="hidden" name="return_to" value="/changes?from={{.Compare.FromID}}&to={{.Compare.ToID}}">
+        <label><span>Name</span><input name="name" placeholder="Campaign name"></label>
+        <div class="form-split">
+          <label>
+            <span>Plugin</span>
+            <select name="plugin">
+              {{range .Plugins}}
+              <option value="{{.ID}}">{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+          <label>
+            <span>Scope</span>
+            <select name="scope">
+              {{range .CampaignScopeOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+        </div>
+        <button type="submit">Create campaign</button>
+      </form>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Hosts</p><h2>Added and removed</h2></div></div>
+      <div class="split-stacks">
+        <div>
+          <h3>Added</h3>
+          <ul class="compact-list">
+            {{range .Diff.AddedHosts}}
+            <li><a href="{{.Href}}">{{.IP}}</a><span>{{.Detail}}</span></li>
+            {{else}}
+            <li class="muted">No added hosts.</li>
+            {{end}}
+          </ul>
+        </div>
+        <div>
+          <h3>Removed</h3>
+          <ul class="compact-list">
+            {{range .Diff.RemovedHosts}}
+            <li><span>{{.IP}}</span><span>{{.Detail}}</span></li>
+            {{else}}
+            <li class="muted">No removed hosts.</li>
+            {{end}}
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Ports and findings</p><h2>Delta counts</h2></div></div>
+      <div class="stat-strip">
+        <div><span>Ports opened</span><strong>{{.Diff.Summary.PortsOpened}}</strong></div>
+        <div><span>Ports closed</span><strong>{{.Diff.Summary.PortsClosed}}</strong></div>
+        <div><span>Findings added</span><strong>{{.Diff.Summary.FindingsAdded}}</strong></div>
+        <div><span>Findings removed</span><strong>{{.Diff.Summary.FindingsRemoved}}</strong></div>
+      </div>
+      <ul class="compact-list">
+        {{range .Diff.AddedFindings}}
+        <li><a href="{{.Href}}">{{.Name}}</a><span>{{.HostIP}} · {{.Severity}}</span></li>
+        {{else}}
+        <li class="muted">No newly added findings in this comparison.</li>
+        {{end}}
+      </ul>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div><p class="eyebrow">Exports</p><h2>Externalize current diff</h2></div>
+    </div>
+    <ul class="compact-list compact-list--links">
+      {{range .Exports}}
+      <li><a href="{{.Href}}">{{.Label}}</a><span>{{.Detail}}</span></li>
+      {{end}}
+    </ul>
+  </section>
+{{template "shell_end" .}}
+{{end}}

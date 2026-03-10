@@ -1,0 +1,27 @@
+{{define "platform_login"}}
+{{template "platform_head" .}}
+<body class="platform-login-body">
+  <main class="platform-login">
+    <section class="platform-login-panel">
+      <p class="platform-kicker">Single-Tenant Security Platform</p>
+      <h1>Sign in to N.W.A.</h1>
+      <p class="platform-subtitle">Admin manages the platform. Users work inside engagements. Inventory is organized as zones, hosts, ports, and findings.</p>
+      {{if .BootstrapHint}}<p class="platform-alert">{{.BootstrapHint}}</p>{{end}}
+      {{if .Error}}<p class="platform-alert is-danger">{{.Error}}</p>{{end}}
+      <form method="post" action="/login" class="platform-form-stack">
+        <label>
+          <span>Username or email</span>
+          <input type="text" name="login" value="{{.DefaultUsername}}" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" name="password" required>
+        </label>
+        <button type="submit" class="platform-primary-button">Sign in</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
+{{end}}
+

@@ -1,0 +1,340 @@
+{{define "page_start"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Page.Title}}</title>
+    <meta name="description" content="{{.Page.Description}}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
+    <script defer src="/js/d3.v2.js"></script>
+    <script defer src="/js/app.js"></script>
+  </head>
+  <body data-running-jobs="{{.Workspace.RunningJobs}}" data-page="{{.Page.ActiveNav}}">
+{{end}}
+
+{{define "explorer_node"}}
+<li
+  class="explorer-node{{if .Active}} is-active{{end}}"
+  data-node-kind="{{.Kind}}"
+  data-node-id="{{.ID}}"
+  data-node-expandable="{{if .Expandable}}true{{else}}false{{end}}">
+  <div class="explorer-node__row">
+    {{if .Expandable}}
+    <button class="explorer-node__toggle" type="button" data-explorer-toggle aria-expanded="{{if .Expanded}}true{{else}}false{{end}}">
+      <span></span>
+    </button>
+    {{else}}
+    <span class="explorer-node__stub"></span>
+    {{end}}
+    <a class="explorer-node__link" href="{{.Href}}">
+      <span class="explorer-node__label">{{.Label}}</span>
+      {{if .Meta}}<span class="explorer-node__meta">{{.Meta}}</span>{{end}}
+    </a>
+    {{if gt .Count 0}}<span class="explorer-node__count">{{.Count}}</span>{{end}}
+  </div>
+  <ul class="explorer-list explorer-list--nested"{{if not .Expanded}} hidden{{end}}>
+    {{range .Children}}
+    {{template "explorer_node" .}}
+    {{end}}
+  </ul>
+</li>
+{{end}}
+
+{{define "readiness_board"}}
+{{if .}}
+  <section class="panel readiness-panel">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Execution readiness</p>
+        <h2>What the command center can launch right now.</h2>
+      </div>
+    </div>
+    <div class="readiness-grid">
+      {{range .}}
+      <article class="readiness-lane readiness-lane--{{.Tone}}">
+        <div class="readiness-lane__head">
+          <div>
+            <p class="eyebrow">{{.Label}}</p>
+            <h3>{{.Ready}} / {{.Total}} ready</h3>
+          </div>
+          <span class="severity severity--{{.Tone}}">{{.Label}}</span>
+        </div>
+        <p class="readiness-lane__copy">{{.Detail}}</p>
+        <ul class="readiness-list">
+          {{range .Tools}}
+          <li class="readiness-item">
+            <div class="readiness-item__body">
+              <strong>{{.Label}}</strong>
+              <span>{{.Family}} · {{.Mode}}</span>
+              {{if .AvailabilityDetail}}<small>{{.AvailabilityDetail}}</small>{{end}}
+            </div>
+            <span class="severity severity--{{.AvailabilityTone}}">{{.Availability}}</span>
+          </li>
+          {{end}}
+        </ul>
+      </article>
+      {{end}}
+    </div>
+  </section>
+{{end}}
+{{end}}
+
+{{define "shell_start"}}
+{{template "page_start" .}}
+    <div class="shell">
+      <header class="command-shell">
+        <div class="menubar menubar--command">
+          <div class="menubar__leading">
+            {{if .Explorer.Enabled}}
+            <button
+              class="sidebar-toggle"
+              type="button"
+              data-sidebar-toggle
+              data-sidebar-label-open="Hide sidebar"
+              data-sidebar-label-closed="Show sidebar"
+              aria-controls="engagement-sidebar"
+              aria-expanded="true">
+              <span class="sidebar-toggle__glyph" aria-hidden="true"></span>
+              <span class="sidebar-toggle__label">Hide sidebar</span>
+            </button>
+            {{end}}
+            <a class="menubar__app" href="/">N.W.A.</a>
+            <span class="menubar__mode">{{.Workspace.Mode}}</span>
+          </div>
+
+          <nav class="nav-menus nav-menus--menubar" aria-label="Primary navigation">
+            {{range .NavGroups}}
+            <div class="nav-menu{{if .Active}} is-active{{end}}" data-nav-menu>
+              <button class="nav-menu__trigger nav-menu__trigger--menubar" type="button" data-nav-toggle aria-expanded="false">
+                <span class="nav-menu__label">{{.Label}}</span>
+                <small>{{.ActiveLabel}}</small>
+              </button>
+              <div class="nav-menu__panel" hidden>
+                <p class="nav-menu__summary">{{.Summary}}</p>
+                <div class="nav-menu__items">
+                  {{range .Items}}
+                  <a class="nav-menu__item{{if .Active}} is-active{{end}}" href="{{.Href}}">
+                    <span>{{.Label}}</span>
+                    {{if .Description}}<small>{{.Description}}</small>{{end}}
+                  </a>
+                  {{end}}
+                </div>
+              </div>
+            </div>
+            {{end}}
+          </nav>
+
+          <div class="menubar__meta">
+            <a class="menubar__registry" href="/workspaces">Engagement registry</a>
+            <span class="menubar__area">{{.ActiveGroup.Label}} · {{.ActiveGroup.ActiveLabel}}</span>
+          </div>
+        </div>
+
+        <div class="command-ribbon">
+          <div class="command-ribbon__identity">
+            <p class="eyebrow">NWA command center · active engagement</p>
+            <div class="command-ribbon__title-row">
+              <a class="brand brand--command" href="/">{{if .Workspace.Name}}{{.Workspace.Name}}{{else}}{{base .Workspace.Root}}{{end}}</a>
+              <span class="command-ribbon__chip">{{.ActiveGroup.Label}}</span>
+            </div>
+            <div class="command-ribbon__meta-row">
+              <span class="command-ribbon__path mono">{{if .Workspace.BundlePath}}{{.Workspace.BundlePath}}{{else}}{{.Workspace.Root}}{{end}}</span>
+              <span class="command-ribbon__summary">{{.ActiveGroup.Summary}}</span>
+            </div>
+          </div>
+          <form class="quick-search quick-search--command" action="/search" method="post">
+            <input type="search" name="query" value="{{.Search.Query}}" placeholder="Search IP, OS, service, banner, or port">
+            <select name="scope">
+              <option value="all" {{if eq .Search.Scope "all"}}selected{{end}}>All</option>
+              <option value="os" {{if eq .Search.Scope "os"}}selected{{end}}>OS</option>
+              <option value="service" {{if eq .Search.Scope "service"}}selected{{end}}>Service</option>
+              <option value="banner" {{if eq .Search.Scope "banner"}}selected{{end}}>Banner</option>
+              <option value="port" {{if eq .Search.Scope "port"}}selected{{end}}>Port</option>
+            </select>
+            <button type="submit">Search</button>
+          </form>
+        </div>
+      </header>
+
+      <div class="layout{{if .Explorer.Enabled}} layout--sidebar{{end}}" data-sidebar-layout>
+        {{if .Explorer.Enabled}}
+        <aside id="engagement-sidebar" class="explorer-panel explorer-panel--sidebar" data-sidebar-panel data-explorer data-explorer-endpoint="{{.Explorer.Endpoint}}">
+          <div class="navigator-head">
+            <div>
+              <p class="eyebrow">Sidebar</p>
+              <h2>Engagement pulse</h2>
+              <p class="navigator-copy">Keep key metrics, live hotspots, and provenance on the side. Hide the rail when you want a wider canvas.</p>
+            </div>
+          </div>
+          <section class="sidebar-card sidebar-card--metrics" aria-label="Key metrics">
+            <div class="sidebar-metric-grid">
+              <article class="sidebar-metric">
+                <span>Live hosts</span>
+                <strong>{{.Scan.LiveHosts}}</strong>
+                <small>Canonical inventory</small>
+              </article>
+              <article class="sidebar-metric">
+                <span>Scans</span>
+                <strong>{{.Workspace.ScanCount}}</strong>
+                <small>Imported sources</small>
+              </article>
+              <article class="sidebar-metric">
+                <span>Finding hosts</span>
+                <strong>{{.Workspace.FindingHosts}}</strong>
+                <small>Assets with issues</small>
+              </article>
+              <article class="sidebar-metric">
+                <span>Findings</span>
+                <strong>{{.Workspace.TotalFindings}}</strong>
+                <small>Current posture</small>
+              </article>
+              <article class="sidebar-metric">
+                <span>Running</span>
+                <strong>{{.Workspace.RunningJobs}}</strong>
+                <small>Queued or active</small>
+              </article>
+              <article class="sidebar-metric">
+                <span>Jobs</span>
+                <strong>{{.Workspace.JobCount}}</strong>
+                <small>Managed executions</small>
+              </article>
+            </div>
+          </section>
+          <section class="sidebar-card sidebar-card--zone">
+            <p class="eyebrow">Current zone</p>
+            <div class="sidebar-zone">
+              <strong>{{.ActiveGroup.Label}}</strong>
+              <span>{{.ActiveGroup.ActiveLabel}}</span>
+              <p>{{.ActiveGroup.Summary}}</p>
+            </div>
+          </section>
+          <label class="navigator-filter" data-navigator-root>
+            <span>Filter hotspots</span>
+            <input type="search" placeholder="scan, host, port, finding" data-navigator-filter>
+          </label>
+
+          <div class="navigator-sections navigator-sections--sidebar" data-navigator-sections>
+            <details class="sidebar-fold" open data-navigator-group>
+              <summary>
+                <span>Recent scans</span>
+                <small>{{len .Explorer.Scans}}</small>
+              </summary>
+              <ul class="navigator-list">
+                {{range .Explorer.Scans}}
+                <li data-navigator-item="{{.Label}} {{.Meta}} {{.Count}}">
+                  <a class="navigator-link" href="{{.Href}}">
+                    <span class="navigator-link__body">
+                      <span class="navigator-link__label">{{.Label}}</span>
+                      <small class="navigator-link__meta">{{.Meta}}</small>
+                    </span>
+                    {{if .Count}}<strong class="navigator-link__count">{{.Count}}</strong>{{end}}
+                  </a>
+                </li>
+                {{end}}
+              </ul>
+            </details>
+
+            <details class="sidebar-fold" open data-navigator-group>
+              <summary>
+                <span>Hot hosts</span>
+                <small>{{len .Explorer.Hosts}}</small>
+              </summary>
+              <ul class="navigator-list">
+                {{range .Explorer.Hosts}}
+                <li data-navigator-item="{{.Label}} {{.Meta}} {{.Count}}">
+                  <a class="navigator-link" href="{{.Href}}">
+                    <span class="navigator-link__body">
+                      <span class="navigator-link__label">{{.Label}}</span>
+                      <small class="navigator-link__meta">{{.Meta}}</small>
+                    </span>
+                    {{if .Count}}<strong class="navigator-link__count">{{.Count}}</strong>{{end}}
+                  </a>
+                </li>
+                {{end}}
+              </ul>
+            </details>
+
+            <details class="sidebar-fold" open data-navigator-group>
+              <summary>
+                <span>Ports</span>
+                <small>{{len .Explorer.Ports}}</small>
+              </summary>
+              <ul class="navigator-list">
+                {{range .Explorer.Ports}}
+                <li data-navigator-item="{{.Label}} {{.Meta}} {{.Count}}">
+                  <a class="navigator-link" href="{{.Href}}">
+                    <span class="navigator-link__body">
+                      <span class="navigator-link__label">{{.Label}}</span>
+                      <small class="navigator-link__meta">{{.Meta}}</small>
+                    </span>
+                    {{if .Count}}<strong class="navigator-link__count">{{.Count}}</strong>{{end}}
+                  </a>
+                </li>
+                {{end}}
+              </ul>
+            </details>
+
+            <details class="sidebar-fold" open data-navigator-group>
+              <summary>
+                <span>Findings</span>
+                <small>{{len .Explorer.Findings}}</small>
+              </summary>
+              <ul class="navigator-list">
+                {{range .Explorer.Findings}}
+                <li data-navigator-item="{{.Label}} {{.Meta}} {{.Count}}">
+                  <a class="navigator-link" href="{{.Href}}">
+                    <span class="navigator-link__body">
+                      <span class="navigator-link__label">{{.Label}}</span>
+                      <small class="navigator-link__meta">{{.Meta}}</small>
+                    </span>
+                    {{if .Count}}<strong class="navigator-link__count">{{.Count}}</strong>{{end}}
+                  </a>
+                </li>
+                {{end}}
+              </ul>
+            </details>
+          </div>
+          <p class="navigator-empty muted" data-navigator-empty hidden>No slices match that filter.</p>
+
+          <details class="navigator-tree-shell sidebar-fold">
+            <summary>
+              <span>Provenance tree</span>
+              <small>Hierarchy</small>
+            </summary>
+            <nav class="explorer-tree" aria-label="Hierarchy explorer">
+              <ul class="explorer-list">
+                {{template "explorer_node" .Explorer.Root}}
+              </ul>
+            </nav>
+          </details>
+          <script type="application/json" data-explorer-path>{{json .Explorer.ExpandPath}}</script>
+        </aside>
+        {{end}}
+
+        <main class="workbench">
+          <div class="page-head">
+            <div>
+              {{if .Breadcrumbs}}
+              <nav class="breadcrumbs" aria-label="Breadcrumb">
+                {{range .Breadcrumbs}}
+                <a href="{{.Href}}">{{.Label}}</a>
+                {{end}}
+              </nav>
+              {{end}}
+              <h1>{{.Page.Title}}</h1>
+              <p class="page-description">{{.Page.Description}}</p>
+            </div>
+          </div>
+{{end}}
+
+{{define "shell_end"}}
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
+{{end}}

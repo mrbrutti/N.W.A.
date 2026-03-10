@@ -1,0 +1,107 @@
+{{define "scope"}}
+{{template "shell_start" .}}
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Scope kickoff</p>
+        <h2>Normalize scope into deterministic chunks before scanning.</h2>
+      </div>
+    </div>
+    <div class="overview-stats">
+      {{range .Stats}}
+      <article class="metric-card metric-card--tight">
+        <span>{{.Label}}</span>
+        <strong>{{.Value}}</strong>
+        <small>{{.Detail}}</small>
+      </article>
+      {{end}}
+    </div>
+    <form class="workspace-stack__block" action="/scope/kickoff" method="post">
+      <div class="form-split">
+        <label><span>Campaign name</span><input type="text" name="name" placeholder="Initial perimeter sweep"></label>
+        <label><span>Auto-approve</span><select name="auto_approve"><option value="0">No</option><option value="1">Yes</option></select></label>
+      </div>
+      <label><span>Scope</span><textarea name="scope" rows="8" placeholder="203.0.113.0/24&#10;corp.example.com&#10;vpn.corp.example.com" required></textarea></label>
+      <button type="submit">Prepare scope</button>
+    </form>
+  </section>
+
+  {{template "readiness_board" .Readiness}}
+
+  <section class="section-grid section-grid--summary">
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Seeds</p><h2>Declared inputs</h2></div></div>
+      <table class="data-table">
+        <thead><tr><th>Value</th><th>Kind</th><th>Source</th><th>Added</th></tr></thead>
+        <tbody>
+          {{range .Seeds}}
+          <tr><td>{{.Value}}<span class="table-meta">{{.Detail}}</span></td><td>{{.Kind}}</td><td>{{.Source}}</td><td>{{.CreatedAt}}</td></tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No scope seeds have been added yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Targets</p><h2>Normalized units</h2></div></div>
+      <table class="data-table">
+        <thead><tr><th>Normalized</th><th>Kind</th><th>Status</th><th>Added</th></tr></thead>
+        <tbody>
+          {{range .Targets}}
+          <tr><td>{{.Normalized}}<span class="table-meta">{{.Value}}</span></td><td>{{.Kind}}</td><td>{{.Status}}</td><td>{{.CreatedAt}}</td></tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No targets have been normalized yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Chunks</p><h2>Execution slices</h2></div></div>
+      <table class="data-table">
+        <thead><tr><th>Chunk</th><th>Stage</th><th>Kind</th><th>Size</th><th>Status</th></tr></thead>
+        <tbody>
+          {{range .Chunks}}
+          <tr>
+            <td>
+              {{.Name}}
+              <span class="table-meta">{{join .Values ", "}}</span>
+              {{if .Detail}}<span class="table-meta">{{.Detail}}</span>{{end}}
+            </td>
+            <td>{{.Stage}}</td>
+            <td>{{.Kind}}</td>
+            <td>{{.Size}}</td>
+            <td><span class="severity severity--{{.StatusTone}}">{{.Status}}</span></td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="muted">No chunks have been prepared yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Approvals</p><h2>Operator gates</h2></div></div>
+      {{range .Approvals}}
+      <form class="workspace-stack__block" action="/approvals/approve" method="post">
+        <input type="hidden" name="approval_id" value="{{.ID}}">
+        <input type="hidden" name="return_to" value="/scope">
+        <div class="inventory-actions">
+          <div>
+            <strong>{{.Summary}}</strong>
+            <p class="panel-copy">{{.Detail}}</p>
+            <p class="table-meta">{{.RequiredClass}} · {{join .AllowedToolIDs ", "}}</p>
+          </div>
+          <button type="submit" {{if ne .Status "pending"}}disabled{{end}}>Approve</button>
+        </div>
+      </form>
+      {{else}}
+      <p class="muted">No approvals are pending.</p>
+      {{end}}
+    </article>
+  </section>
+{{template "shell_end" .}}
+{{end}}

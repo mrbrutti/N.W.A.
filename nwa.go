@@ -1,186 +1,115 @@
-// Copyright 2012, Matias Pablo Brutti  All rights reserved.
-//
-// N.W.A. is free software: you can redistribute it and/or modify it under
-// the terms of version 3 of the GNU Lesser General Public License as
-// published by the Free Software Foundation.
-//
-// N.W.A. is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for
-// more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with ESearchy.  If not, see <http://www.gnu.org/licenses/>.
-
 package main
 
 import (
-	"./nmap"
-	"fmt"
-	goopt "github.com/droundy/goopt"
+	"flag"
+	"log/slog"
 	"net/http"
-	"strconv"
+	"os"
 	"strings"
-	"text/template"
+	"time"
 )
-
-const (
-	Reset   = "\x1b[0m"
-	Black   = "\x1b[30m"
-	Red     = "\x1b[31m"
-	Green   = "\x1b[32m"
-	Yellow  = "\x1b[33m"
-	Blue    = "\x1b[34m"
-	Magenta = "\x1b[35m"
-	Cyan    = "\x1b[36m"
-	White   = "\x1b[37m"
-)
-
-func portResults(rw http.ResponseWriter, req *http.Request) {
-	req.ParseForm()
-	t := template.New("list.html")
-	t.ParseFiles("web/list.html")
-	list_type := req.FormValue("type")
-	switch list_type {
-	case "port":
-		t.Execute(rw, v.OpenPorts())
-	case "os":
-		t.Execute(rw, v.OSList())
-	default:
-		t.Execute(rw, []nmap.OpenList{})
-	}
-
-}
-
-func SearchHandler(rw http.ResponseWriter, req *http.Request) {
-	req.ParseForm()
-	search_type := req.FormValue("type")
-	query := req.FormValue("query")
-	t := template.New("nmap.html")
-	t.ParseFiles("web/nmap.html")
-	switch search_type {
-	case "os":
-		t.Execute(rw, v.WithOS(query))
-	case "service":
-		t.Execute(rw, v.WithService(query))
-	case "banner":
-		t.Execute(rw, v.WithBanner(query))
-	case "port":
-		t.Execute(rw, v.WithOpenPort(query))
-	default:
-		t.Execute(rw, []nmap.Host{})
-	}
-}
-
-func nmapResults(rw http.ResponseWriter, req *http.Request) {
-	req.ParseForm()
-	t := template.New("nmap.html")
-	t.ParseFiles("web/nmap.html")
-	hosts := v.Alive()
-	maxsize := len(hosts)
-	if maxsize < 50 {
-			t.Execute(rw, hosts)
-	} else {
-		start, err := strconv.Atoi(req.FormValue("start"))
-		if err != nil {
-			t.Execute(rw, hosts[0:49])
-		} else {
-			if start <= maxsize-50 {
-				t.Execute(rw, hosts[start:start+49])
-			} else {
-				if start < maxsize {
-					t.Execute(rw, hosts[start:maxsize])
-				} else {
-					t.Execute(rw, hosts[maxsize-50:maxsize])
-				}
-			}
-		}
-	}
-}
-
-func nmapAllResults(rw http.ResponseWriter, req *http.Request) {
-	t := template.New("nmap.html")
-	t.ParseFiles("web/nmap.html")
-	t.Execute(rw, v.Alive())
-}
-
-func nmapIPInfo(rw http.ResponseWriter, req *http.Request) {
-	ip := req.URL.Path[lenPath:]
-	t := template.New("host.html")
-	t.ParseFiles("web/host.html")
-
-	for _, host := range v.Alive() {
-		if host.Address.Addr == ip {
-			t.Execute(rw, host)
-		}
-	}
-}
-
-func nmapIPInfojson(rw http.ResponseWriter, req *http.Request) {
-	ip := req.URL.Path[len("/json/"):]
-	nodes := []string{}
-	links := []string{}
-	for _, host := range v.Alive() {
-		if host.Address.Addr == ip {
-			for i, h := range host.Trace.Hops {
-				nodes = append(nodes, fmt.Sprintf("{\"group\":%s , \"name\": \"%s\", \"rtt\": \"%s\" }", h.Ttl, h.IPAddr, h.Rtt))
-				links = append(links, fmt.Sprintf("{\"source\":%d,\"target\":%d,\"value\":%s}", i, i+1, h.Rtt))
-			}
-		}
-	}
-	fmt.Fprintf(rw, "{ \"nodes\":\n [\n%s\n]\n,\"links\":\n [\n%s\n]\n}", strings.Join(nodes, ",\n"), strings.Join(links[0:len(links)-1], ",\n"))
-}
-
-var v = nmap.Scan{}
-
-const lenPath = len("/ip/")
-
-var nmapfile = goopt.String([]string{"-f", "--file"},
-	"", "Name of the .xml nmap file")
-
-var webserverport = goopt.String([]string{"-p", "--port"},
-	"", "Port to host Web Server")
 
 func main() {
-	goopt.Description = func() string {
-		return "Pretty Pringing Nmap Web App Viewer"
+	port := flag.String("p", "8080", "Port to host the web UI on")
+	workspaceDir := flag.String("workspace", defaultWorkspaceFile, "Workspace file to open or create (for example acme.nwa)")
+	dbDSN := flag.String("db", strings.TrimSpace(os.Getenv("NWA_DB_DSN")), "Database DSN for service mode (PostgreSQL or SQLite path)")
+	dataDir := flag.String("data-dir", strings.TrimSpace(os.Getenv("NWA_DATA_DIR")), "Data directory for service artifacts, bundles, and local service DB files")
+	flag.StringVar(port, "port", "8080", "Port to host the web UI on")
+	flag.StringVar(workspaceDir, "w", defaultWorkspaceFile, "Workspace file to open or create (for example acme.nwa)")
+	var seedFiles multiStringFlag
+	flag.Var(&seedFiles, "f", "Path, directory, or glob for one or more supported scan sources to load")
+	flag.Var(&seedFiles, "file", "Path, directory, or glob for one or more supported scan sources to load")
+	if err := flag.CommandLine.Parse(normalizeCLIArgs(os.Args[1:])); err != nil {
+		os.Exit(2)
 	}
-	goopt.Version = "1.0"
-	goopt.Summary = "convert .xml to .html pretty format"
-	goopt.Parse(nil)
+	seedFiles = append(seedFiles, flag.Args()...)
 
-	if *nmapfile != "" {
-		fmt.Printf("Processing nmap (%s).\n", *nmapfile)
-		go nmap.Parse(&v, *nmapfile)
-		
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
 
-		// Static Files
-		http.Handle("/js/", http.StripPrefix("/js/",
-			http.FileServer(http.Dir("./web/js"))))
-		http.Handle("/css/", http.StripPrefix("/css/",
-			http.FileServer(http.Dir("./web/css"))))
-		http.Handle("/images/", http.StripPrefix("/images/",
-			http.FileServer(http.Dir("./web/images"))))
+	startedAt := time.Now()
+	app, err := newApplicationWithConfig(applicationConfig{
+		SeedFiles:       seedFiles,
+		WorkspaceTarget: *workspaceDir,
+		DBDSN:           strings.TrimSpace(*dbDSN),
+		DataDir:         strings.TrimSpace(*dataDir),
+	}, logger)
+	if err != nil {
+		logger.Error("initialization failed", "error", err)
+		os.Exit(1)
+	}
 
-		// Dinamic Content
-		http.HandleFunc("/", nmapResults)
-		http.HandleFunc("/all", nmapAllResults)
-		http.HandleFunc("/ip/", nmapIPInfo)
-		http.HandleFunc("/json/", nmapIPInfojson)
-		http.HandleFunc("/list", portResults)
-		http.HandleFunc("/search", SearchHandler)
+	handler, err := app.routes()
+	if err != nil {
+		logger.Error("route setup failed", "error", err)
+		os.Exit(1)
+	}
 
-		//Launch web server in 8080
-		if *webserverport != "" {
-			fmt.Printf("Hosting Nmap results in http://localhost:%s\n", *webserverport)
-			http.ListenAndServe(fmt.Sprintf(":%s",*webserverport), nil)
-		} else {
-			fmt.Print("Hosting Nmap results in http://localhost:8080\n")
-			http.ListenAndServe(":8080", nil)
+	status := app.workspace.workspaceStatus()
+	logger.Info("scan loaded",
+		"workspace", chooseString(status.Name, app.workspace.root),
+		"workspace_mode", status.Mode,
+		"seed_files", []string(seedFiles),
+		"scans", status.ScanCount,
+		"hosts", app.workspace.currentSnapshot().meta.LiveHosts,
+		"startup", time.Since(startedAt),
+	)
+
+	server := &http.Server{
+		Addr:              ":" + *port,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	logger.Info("hosting N.W.A.", "url", "http://localhost:"+*port)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Error("server exited", "error", err)
+		os.Exit(1)
+	}
+}
+
+type multiStringFlag []string
+
+func (m *multiStringFlag) String() string {
+	return strings.Join(*m, ",")
+}
+
+func (m *multiStringFlag) Set(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	*m = append(*m, value)
+	return nil
+}
+
+func normalizeCLIArgs(args []string) []string {
+	normalized := make([]string, 0, len(args))
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		switch arg {
+		case "-f", "-file":
+			if index+1 >= len(args) {
+				normalized = append(normalized, arg)
+				continue
+			}
+			for index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+				normalized = append(normalized, arg, args[index+1])
+				index++
+			}
+		case "-p", "-port", "-w", "-workspace":
+			normalized = append(normalized, arg)
+			if index+1 < len(args) {
+				index++
+				normalized = append(normalized, args[index])
+			}
+		default:
+			normalized = append(normalized, arg)
 		}
-			
-	} else {
-		fmt.Print("Need to provide a NMAP xml output file. (i.e. -f <nmap_xml>)")
-		return
 	}
+	return normalized
 }

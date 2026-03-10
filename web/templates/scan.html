@@ -1,0 +1,100 @@
+{{define "scan"}}
+{{template "shell_start" .}}
+  <section class="section-grid section-grid--summary">
+    <article class="panel panel--hero">
+      <p class="eyebrow">Scan provenance</p>
+      <h2>{{.Scan.Summary.Name}}</h2>
+      <p class="panel-copy">{{.Scan.Description}}</p>
+    </article>
+    <div class="metric-grid metric-grid--compact">
+      <article class="metric-card"><span>Scanner</span><strong>{{.Scan.Summary.Scanner}}</strong><small>{{.Scan.Summary.Kind}}</small></article>
+      <article class="metric-card"><span>Hosts</span><strong>{{.Scan.HostCount}}</strong><small>{{.Scan.Summary.ImportedAt}}</small></article>
+      <article class="metric-card"><span>Findings</span><strong>{{.Scan.FindingTotals.Total}}</strong><small>{{.Scan.SourceLabel}}</small></article>
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Hosts in scan</p><h2>Observed hosts</h2></div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Host</th><th>OS</th><th>Ports</th><th>Findings</th></tr>
+        </thead>
+        <tbody>
+          {{range .Scan.Hosts}}
+          <tr>
+            <td><a href="/hosts/{{.IP}}?scan={{$.Scan.Summary.ID}}">{{.DisplayName}}</a><span class="table-meta mono">{{.IP}}</span></td>
+            <td>{{.OS}}</td>
+            <td>{{.OpenPortCount}}</td>
+            <td>{{.Findings.Total}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Port inventory</p><h2>Exposed ports in this scan</h2></div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Port</th><th>Service</th><th>Hosts</th><th>Findings</th></tr>
+        </thead>
+        <tbody>
+          {{range .Scan.Ports}}
+          <tr>
+            <td><a href="{{.Href}}?scan={{$.Scan.Summary.ID}}">{{.Label}}</a></td>
+            <td>{{.Service}}</td>
+            <td>{{.Hosts}}</td>
+            <td>{{.Findings}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No open ports were parsed for this scan.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Grouped findings</p><h2>Definitions touching this scan</h2></div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Finding</th><th>Severity</th><th>Hosts</th><th>Last seen</th></tr>
+        </thead>
+        <tbody>
+          {{range .Scan.Findings}}
+          <tr>
+            <td><a href="{{.Href}}">{{.Name}}</a></td>
+            <td><span class="severity severity--{{.SeverityTone}}">{{.Severity}}</span></td>
+            <td>{{.Hosts}}</td>
+            <td>{{.LastSeen}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No grouped findings tied to scan-observed hosts.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Related jobs</p><h2>Artifacts and managed runs</h2></div>
+      </div>
+      <ul class="compact-list">
+        {{range .Scan.Jobs}}
+        <li><span>{{.PluginLabel}} · {{.Status}}</span><span>{{.CreatedAt}}</span></li>
+        {{else}}
+        <li class="muted">No direct workspace job provenance is attached to this scan.</li>
+        {{end}}
+      </ul>
+    </article>
+  </section>
+{{template "shell_end" .}}
+{{end}}

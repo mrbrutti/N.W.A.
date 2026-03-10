@@ -1,0 +1,225 @@
+{{define "overview"}}
+{{template "shell_start" .}}
+  <section class="panel overview-brief">
+    <div class="overview-brief__lead">
+      <p class="eyebrow">Executive dashboard</p>
+      <h2>Workspace posture</h2>
+    </div>
+    <div class="overview-stats">
+      {{range .Stats}}
+      <article class="metric-card metric-card--tight">
+        <span>{{.Label}}</span>
+        <strong>{{.Value}}</strong>
+        <small>{{.Detail}}</small>
+      </article>
+      {{end}}
+    </div>
+    <div class="insight-grid">
+      <article class="insight-panel">
+        <div class="insight-panel__head">
+          <p class="eyebrow">Exposure leaders</p>
+          <a class="text-link" href="/ports">Ports</a>
+        </div>
+        <ul class="bar-list">
+          {{range sliceBuckets .TopPorts 5}}
+          <li class="bar-list__row">
+            <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+            <span class="bar-list__value">{{.Count}}</span>
+            <div class="bar-list__track"><span class="bar-list__fill" style="width: {{percent .Count (maxBucketCount $.TopPorts)}}%;"></span></div>
+          </li>
+          {{else}}
+          <li class="muted">No port distribution is available yet.</li>
+          {{end}}
+        </ul>
+      </article>
+
+      <article class="insight-panel">
+        <div class="insight-panel__head">
+          <p class="eyebrow">OS mix</p>
+          <a class="text-link" href="/hosts?scope=os">Hosts</a>
+        </div>
+        <ul class="bar-list">
+          {{range sliceBuckets .TopOS 5}}
+          <li class="bar-list__row">
+            <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+            <span class="bar-list__value">{{.Count}}</span>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--alt" style="width: {{percent .Count (maxBucketCount $.TopOS)}}%;"></span></div>
+          </li>
+          {{else}}
+          <li class="muted">No OS distribution is available yet.</li>
+          {{end}}
+        </ul>
+      </article>
+
+      <article class="insight-panel">
+        <div class="insight-panel__head">
+          <p class="eyebrow">Service mix</p>
+          <a class="text-link" href="/hosts?scope=service">Services</a>
+        </div>
+        <ul class="bar-list">
+          {{range sliceBuckets .TopServices 5}}
+          <li class="bar-list__row">
+            <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+            <span class="bar-list__value">{{.Count}}</span>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--warm" style="width: {{percent .Count (maxBucketCount $.TopServices)}}%;"></span></div>
+          </li>
+          {{else}}
+          <li class="muted">No service distribution is available yet.</li>
+          {{end}}
+        </ul>
+      </article>
+
+      <article class="insight-panel">
+        <div class="insight-panel__head">
+          <p class="eyebrow">Severity spread</p>
+          <a class="text-link" href="/findings">Findings</a>
+        </div>
+        <div class="severity-stack">
+          <div class="severity-stack__row">
+            <span>Critical</span>
+            <strong>{{.FindingTotals.Critical}}</strong>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--critical" style="width: {{percent .FindingTotals.Critical .FindingTotals.Total}}%;"></span></div>
+          </div>
+          <div class="severity-stack__row">
+            <span>High</span>
+            <strong>{{.FindingTotals.High}}</strong>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--high" style="width: {{percent .FindingTotals.High .FindingTotals.Total}}%;"></span></div>
+          </div>
+          <div class="severity-stack__row">
+            <span>Medium</span>
+            <strong>{{.FindingTotals.Medium}}</strong>
+            <div class="bar-list__track"><span class="bar-list__fill" style="width: {{percent .FindingTotals.Medium .FindingTotals.Total}}%;"></span></div>
+          </div>
+          <div class="severity-stack__row">
+            <span>Low</span>
+            <strong>{{.FindingTotals.Low}}</strong>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--low" style="width: {{percent .FindingTotals.Low .FindingTotals.Total}}%;"></span></div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--three">
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Recent scans</p>
+          <h2>Source intake</h2>
+        </div>
+        <a class="text-link" href="/scans">Full index</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Scan</th><th>Scanner</th><th>Imported</th><th>Hosts</th></tr>
+        </thead>
+        <tbody>
+          {{range .RecentScans}}
+          <tr>
+            <td><a href="/scans/{{.ID}}">{{.Name}}</a></td>
+            <td>{{.Scanner}}</td>
+            <td>{{.ImportedAt}}</td>
+            <td>{{.LiveHosts}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Latest change</p>
+          <h2>Delta summary</h2>
+        </div>
+        <a class="text-link" href="/changes">Open changes</a>
+      </div>
+      {{if .HasLatestDiff}}
+      <p class="summary-line">{{.LatestDiff.SummaryLine}}</p>
+      <div class="stat-strip">
+        <div><span>Hosts</span><strong>{{.LatestDiff.Summary.HostsAdded}} / {{.LatestDiff.Summary.HostsRemoved}}</strong></div>
+        <div><span>Ports</span><strong>{{.LatestDiff.Summary.PortsOpened}} / {{.LatestDiff.Summary.PortsClosed}}</strong></div>
+        <div><span>Findings</span><strong>{{.LatestDiff.Summary.FindingsAdded}} / {{.LatestDiff.Summary.FindingsRemoved}}</strong></div>
+      </div>
+      {{else}}
+      <p class="muted">No historical checkpoint delta is available yet.</p>
+      {{end}}
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Activity feed</p>
+          <h2>Recent observations</h2>
+        </div>
+        <a class="text-link" href="/workspace">Workspace ops</a>
+      </div>
+      <ul class="activity-list">
+        {{range .Observations}}
+        <li>
+          <div>
+            <a href="{{.Href}}">{{.Label}}</a>
+            <p>{{.Detail}}</p>
+          </div>
+          <span class="table-meta">{{.At}}</span>
+        </li>
+        {{else}}
+        <li class="muted">No recent workspace observations yet.</li>
+        {{end}}
+      </ul>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Priority hosts</p>
+          <h2>High-exposure inventory</h2>
+        </div>
+        <a class="text-link" href="/hosts">Open hosts</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Host</th><th>OS</th><th>Ports</th><th>Findings</th></tr>
+        </thead>
+        <tbody>
+          {{range .PriorityHosts}}
+          <tr>
+            <td><a href="/hosts/{{.IP}}">{{.DisplayName}}</a><span class="table-meta mono">{{.IP}}</span></td>
+            <td>{{.OS}}</td>
+            <td>{{.OpenPortCount}}</td>
+            <td>{{.Findings.Total}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Grouped findings</p>
+          <h2>Highest-signal definitions</h2>
+        </div>
+        <a class="text-link" href="/findings">Open findings</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Finding</th><th>Severity</th><th>Hosts</th><th>Last seen</th></tr>
+        </thead>
+        <tbody>
+          {{range .RecentFindings}}
+          <tr>
+            <td><a href="{{.Href}}">{{.Name}}</a><span class="table-meta">{{.Source}}{{if .TemplateID}} · {{.TemplateID}}{{end}}</span></td>
+            <td><span class="severity severity--{{.SeverityTone}}">{{.Severity}}</span></td>
+            <td>{{.Hosts}}</td>
+            <td>{{.LastSeen}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+  </section>
+{{template "shell_end" .}}
+{{end}}

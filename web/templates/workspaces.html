@@ -1,0 +1,70 @@
+{{define "workspaces"}}
+{{template "shell_start" .}}
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Workspace registry</p>
+        <h2>Create, switch, import, and export portable workspaces.</h2>
+      </div>
+    </div>
+    <div class="split-stacks">
+      <form class="workspace-stack__block" action="/workspaces/create" method="post">
+        <p class="eyebrow">Create workspace</p>
+        <label><span>Name</span><input type="text" name="name" placeholder="engagement-alpha" required></label>
+        <label><span>Description</span><input type="text" name="description" placeholder="External perimeter and internal validation"></label>
+        <label><span>Initial scope</span><textarea name="scope" rows="6" placeholder="192.0.2.0/24&#10;example.com&#10;vpn.example.net"></textarea></label>
+        <label class="checkbox-row"><input type="checkbox" name="auto_approve" value="1"> <span>Auto-approve kickoff and queue first discovery wave</span></label>
+        <button type="submit">Create workspace</button>
+      </form>
+
+      <form class="workspace-stack__block" action="/workspaces/import" method="post" enctype="multipart/form-data">
+        <p class="eyebrow">Import `.nwa` bundle</p>
+        <label><span>Bundle path</span><input type="text" name="bundle_path" placeholder="/path/to/engagement.nwa"></label>
+        <label><span>or upload</span><input type="file" name="bundle_file" accept=".nwa"></label>
+        <label><span>Workspace name</span><input type="text" name="name" placeholder="Imported engagement"></label>
+        <button type="submit">Import bundle</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    {{range .Items}}
+    <article class="panel{{if .Selected}} panel--context{{end}}">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">{{.Mode}}</p>
+          <h2>{{.Name}}</h2>
+          <p class="panel-copy">{{.Description}}</p>
+        </div>
+        {{if .Selected}}<span class="severity severity--ok">active</span>{{end}}
+      </div>
+      <div class="overview-stats">
+        {{range .Stats}}
+        <article class="metric-card metric-card--tight">
+          <span>{{.Label}}</span>
+          <strong>{{.Value}}</strong>
+          <small>{{.Detail}}</small>
+        </article>
+        {{end}}
+      </div>
+      <div class="inventory-actions">
+        <form action="/workspaces/select" method="post">
+          <input type="hidden" name="workspace" value="{{.ID}}">
+          <input type="hidden" name="return_to" value="/overview">
+          <button type="submit">{{if .Selected}}Current workspace{{else}}Switch to workspace{{end}}</button>
+        </form>
+        <form action="/workspaces/export" method="post">
+          <input type="hidden" name="workspace" value="{{.ID}}">
+          <button type="submit" class="button-secondary">Export bundle</button>
+        </form>
+      </div>
+      <p class="table-meta mono">{{.BundlePath}}</p>
+    </article>
+    {{else}}
+    <article class="panel">
+      <p class="muted">No workspaces have been created yet.</p>
+    </article>
+    {{end}}
+  </section>
+{{template "shell_end" .}}
+{{end}}

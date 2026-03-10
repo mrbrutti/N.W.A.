@@ -1,0 +1,142 @@
+{{define "finding"}}
+{{template "shell_start" .}}
+  <section class="section-grid section-grid--summary">
+    <article class="panel panel--hero">
+      <p class="eyebrow">Finding definition</p>
+      <h2>{{.Finding.Group.Name}}</h2>
+      <p class="panel-copy">{{if .Finding.Description}}{{.Finding.Description}}{{else}}Grouped signal derived from imported scanners and enrichment jobs, tied back to hosts, ports, scans, and managed runs.{{end}}</p>
+    </article>
+    <div class="metric-grid metric-grid--compact">
+      <article class="metric-card"><span>Severity</span><strong>{{.Finding.Group.Severity}}</strong><small>{{.Finding.Group.Source}}</small></article>
+      <article class="metric-card"><span>Hosts</span><strong>{{.Finding.Group.Hosts}}</strong><small>Affected inventory members</small></article>
+      <article class="metric-card"><span>Ports</span><strong>{{.Finding.Group.Ports}}</strong><small>Distinct target ports</small></article>
+      <article class="metric-card"><span>Occurrences</span><strong>{{.Finding.Group.Occurrences}}</strong><small>{{.Finding.Group.LastSeen}}</small></article>
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--hosts-toolbar">
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Operator lanes</p><h2>Command, import, and connector paths</h2></div>
+      </div>
+      <div class="integration-lanes">
+        {{range .IntegrationLanes}}
+        <section class="integration-lane">
+          <div class="integration-lane__head">
+            <div>
+              <p class="eyebrow">{{.Label}}</p>
+              <h3>{{.Detail}}</h3>
+            </div>
+          </div>
+          <div class="integration-lane__grid">
+            {{range .Actions}}
+            <article class="integration-card">
+              <div class="integration-card__meta">
+                <span class="severity severity--{{.AvailabilityTone}}">{{.Availability}}</span>
+                <span class="table-meta">{{.Mode}} · {{.Family}}</span>
+              </div>
+              <strong>{{.Label}}</strong>
+              <p>{{.Description}}</p>
+              {{if gt .Count 0}}
+              <div class="tag-row">
+                <span class="tag">{{.Count}} hosts</span>
+              </div>
+              {{end}}
+              {{if .PluginID}}
+              <form class="integration-card__action" action="/plugins/run" method="post">
+                <input type="hidden" name="plugin" value="{{.PluginID}}">
+                <input type="hidden" name="target_mode" value="{{.TargetMode}}">
+                <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+                {{if .Severity}}<input type="hidden" name="severity" value="{{.Severity}}">{{end}}
+                {{if .Profile}}<input type="hidden" name="profile" value="{{.Profile}}">{{end}}
+                {{if .CrawlDepth}}<input type="hidden" name="crawl_depth" value="{{.CrawlDepth}}">{{end}}
+                <textarea hidden name="targets">{{.Targets}}</textarea>
+                <button type="submit" {{if .Disabled}}disabled{{end}}>{{.ActionLabel}}</button>
+              </form>
+              {{else if .Href}}
+              <a class="text-link integration-card__link" href="{{.Href}}">{{.ActionLabel}}</a>
+              {{else}}
+              <span class="table-meta">{{.ActionLabel}}</span>
+              {{end}}
+            </article>
+            {{end}}
+          </div>
+        </section>
+        {{end}}
+      </div>
+    </article>
+
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Definition context</p><h2>Source, timing, and tags</h2></div>
+      </div>
+      <div class="stat-strip">
+        <div><span>Source</span><strong>{{.Finding.Group.Source}}</strong></div>
+        <div><span>Template</span><strong>{{if .Finding.Group.TemplateID}}{{.Finding.Group.TemplateID}}{{else}}n/a{{end}}</strong></div>
+        <div><span>First seen</span><strong>{{.Finding.Group.FirstSeen}}</strong></div>
+        <div><span>Last seen</span><strong>{{.Finding.Group.LastSeen}}</strong></div>
+      </div>
+      {{if .Finding.Tags}}
+      <div class="tag-row detail-tags">
+        {{range .Finding.Tags}}
+        <span class="tag">{{.}}</span>
+        {{end}}
+      </div>
+      {{end}}
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Occurrences</p><h2>Affected hosts and targets</h2></div>
+      </div>
+      <table class="data-table data-table--dense">
+        <thead>
+          <tr><th>Host</th><th>Target</th><th>Port</th><th>Scans</th></tr>
+        </thead>
+        <tbody>
+          {{range .Finding.Occurrences}}
+          <tr>
+            <td><a href="{{.Href}}">{{.HostLabel}}</a><span class="table-meta mono">{{.HostIP}}</span></td>
+            <td class="mono">{{.Target}}</td>
+            <td>{{if .Port}}{{.Port}}{{else}}n/a{{end}}</td>
+            <td>{{join .Scans ", "}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No occurrences are available for this finding.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Related context</p><h2>Scans and jobs</h2></div>
+      </div>
+      <div class="split-stacks">
+        <div>
+          <h3>Scans</h3>
+          <ul class="compact-list">
+            {{range .Finding.RelatedScans}}
+            <li><a href="/scans/{{.ID}}">{{.Name}}</a><span>{{.ImportedAt}}</span></li>
+            {{else}}
+            <li class="muted">No related scans were resolved.</li>
+            {{end}}
+          </ul>
+        </div>
+        <div>
+          <h3>Jobs</h3>
+          <ul class="compact-list">
+            {{range .Finding.RelatedJobs}}
+            <li><span>{{.PluginLabel}} · {{.Status}}</span><span>{{.CreatedAt}}</span></li>
+            {{else}}
+            <li class="muted">No related managed jobs were resolved.</li>
+            {{end}}
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+{{template "shell_end" .}}
+{{end}}

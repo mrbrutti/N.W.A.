@@ -1,0 +1,30 @@
+{{define "scans_index"}}
+{{template "shell_start" .}}
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Global scan index</p>
+        <h2>Source provenance</h2>
+      </div>
+      <a class="text-link" href="/workspace">Workspace intake</a>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Name</th><th>Kind</th><th>Scanner</th><th>Command</th><th>Hosts</th><th>Imported</th></tr>
+      </thead>
+      <tbody>
+        {{range .Scans}}
+        <tr>
+          <td><a href="/scans/{{.ID}}">{{.Name}}</a></td>
+          <td>{{.Kind}}</td>
+          <td>{{.Scanner}}</td>
+          <td class="mono table-meta">{{.Command}}</td>
+          <td>{{.LiveHosts}}</td>
+          <td>{{.ImportedAt}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
+{{template "shell_end" .}}
+{{end}}

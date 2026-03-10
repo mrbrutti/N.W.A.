@@ -1,0 +1,139 @@
+{{define "findings"}}
+{{template "shell_start" .}}
+  <section class="panel inventory-hero">
+    <div class="inventory-hero__lead">
+      <p class="eyebrow">Finding index</p>
+      <h2>Grouped definitions across the workspace</h2>
+      <p class="panel-copy">Group raw scanner output into definitions, sort by severity or blast radius, and pivot by source when you need to decide what to validate next.</p>
+    </div>
+    <div class="overview-stats">
+      {{range .Stats}}
+      <article class="metric-card metric-card--tight">
+        <span>{{.Label}}</span>
+        <strong>{{.Value}}</strong>
+        <small>{{.Detail}}</small>
+      </article>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--hosts-toolbar">
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Definition query</p><h2>Filter and rank findings</h2></div>
+      </div>
+      <form class="stack-form" action="/findings" method="get">
+        <div class="form-split">
+          <label>
+            <span>Search</span>
+            <input type="search" name="query" value="{{.Query}}" placeholder="template, source, severity, title">
+          </label>
+          <label>
+            <span>Severity</span>
+            <select name="severity">
+              {{range .SeverityOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+          <label>
+            <span>Source</span>
+            <select name="source">
+              {{range .SourceOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+          <label>
+            <span>Sort</span>
+            <select name="sort">
+              {{range .SortOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+        </div>
+        <div class="inventory-query-actions">
+          <button type="submit">Run finding query</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Current slice</p><h2>Definition posture</h2></div>
+      </div>
+      <div class="stat-strip">
+        <div><span>Definitions</span><strong>{{len .Findings}}</strong></div>
+        <div><span>Severity</span><strong>{{range .SeverityOptions}}{{if .Selected}}{{.Label}}{{end}}{{end}}</strong></div>
+        <div><span>Source</span><strong>{{range .SourceOptions}}{{if .Selected}}{{.Label}}{{end}}{{end}}</strong></div>
+        <div><span>Sorted by</span><strong>{{range .SortOptions}}{{if .Selected}}{{.Label}}{{end}}{{end}}</strong></div>
+      </div>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--three">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Severity distribution</p><h2>Where the occurrence weight sits</h2></div>
+      </div>
+      <div class="bucket-chart" data-bucket-chart='{{json (sliceBuckets .SeverityBuckets 8)}}' data-chart-tone="severity" data-chart-empty="No severity distribution is available for this slice."></div>
+      <p class="chart-caption">Click a bar to pivot the grouped finding set by severity.</p>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Source concentration</p><h2>Which integrations are producing signal</h2></div>
+      </div>
+      <div class="bucket-chart" data-bucket-chart='{{json (sliceBuckets .SourceBuckets 8)}}' data-chart-tone="alt" data-chart-empty="No finding sources are available for this slice."></div>
+      <p class="chart-caption">This graph shows which scanner families are producing the most occurrence volume.</p>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Target hotspots</p><h2>Ports attracting the most findings</h2></div>
+      </div>
+      <div class="bucket-chart" data-bucket-chart='{{json (sliceBuckets .PortBuckets 8)}}' data-chart-tone="warm" data-chart-empty="No target-port hotspots are available for this slice."></div>
+      <p class="chart-caption">Use the hotspot graph to jump from finding definitions back into the port inventory.</p>
+    </article>
+  </section>
+
+  <section class="panel panel--tight">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Grouped results</p>
+        <h2>{{len .Findings}} definitions in scope</h2>
+      </div>
+      <span class="muted">Each row represents a grouped finding definition, not a raw occurrence line.</span>
+    </div>
+    <div class="inventory-table-wrap">
+      <table class="data-table data-table--dense inventory-table">
+        <thead>
+          <tr><th>Finding</th><th>Severity</th><th>Hosts</th><th>Ports</th><th>Occurrences</th><th>Scans</th><th>Last seen</th></tr>
+        </thead>
+        <tbody>
+          {{range .Findings}}
+          <tr>
+            <td>
+              <div class="inventory-host">
+                <a class="inventory-host__title" href="{{.Href}}">{{.Name}}</a>
+                <span class="table-meta">{{.Source}}{{if .TemplateID}} · {{.TemplateID}}{{end}}</span>
+                <span class="table-meta">First seen {{.FirstSeen}}</span>
+              </div>
+            </td>
+            <td><span class="severity severity--{{.SeverityTone}}">{{.Severity}}</span></td>
+            <td>{{.Hosts}}</td>
+            <td>{{.Ports}}</td>
+            <td>{{.Occurrences}}</td>
+            <td>{{.RelatedScans}}</td>
+            <td>{{.LastSeen}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="7" class="muted">No grouped findings match the current slice.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{{template "shell_end" .}}
+{{end}}

@@ -1,0 +1,461 @@
+{{define "workspace"}}
+{{template "shell_start" .}}
+  {{if .IsEmpty}}
+  <section class="empty-state">
+    <div>
+      <p class="eyebrow">Empty workspace</p>
+      <h2>Start by importing source material.</h2>
+      <p>The `.nwa` file already exists. What it needs now is source material: scans, reports, or directories to ingest so hosts, ports, and findings can be built into the workspace inventory.</p>
+    </div>
+  </section>
+  {{end}}
+
+  <section class="panel workspace-summary">
+    <div class="workspace-summary__lead">
+      <p class="eyebrow">Workspace control plane</p>
+      <h2>Scanner intake, posture, and follow-up orchestration.</h2>
+      <p class="panel-copy">Keep the first screen operational: source mix, coverage posture, job pipeline, and the next recommended runs for the active `.nwa` file.</p>
+    </div>
+    <div class="workspace-summary__metrics">
+      <article class="metric-card metric-card--tight">
+        <span>Live hosts</span>
+        <strong>{{.Scan.LiveHosts}}</strong>
+        <small>Canonical inventory</small>
+      </article>
+      <article class="metric-card metric-card--tight">
+        <span>Scans</span>
+        <strong>{{.Workspace.ScanCount}}</strong>
+        <small>Imported sources</small>
+      </article>
+      <article class="metric-card metric-card--tight">
+        <span>Findings</span>
+        <strong>{{.FindingTotals.Total}}</strong>
+        <small>Across integrations</small>
+      </article>
+      <article class="metric-card metric-card--tight">
+        <span>Running</span>
+        <strong>{{.Workspace.RunningJobs}}</strong>
+        <small>Managed jobs</small>
+      </article>
+      <article class="metric-card metric-card--tight">
+        <span>Saved views</span>
+        <strong>{{len .SavedViews}}</strong>
+        <small>Analyst cuts</small>
+      </article>
+      <article class="metric-card metric-card--tight">
+        <span>Campaigns</span>
+        <strong>{{len .Campaigns}}</strong>
+        <small>Follow-up waves</small>
+      </article>
+    </div>
+    <div class="insight-grid insight-grid--workspace">
+      <article class="insight-panel">
+        <div class="insight-panel__head">
+          <p class="eyebrow">Source mix</p>
+          <a class="text-link" href="/scans">Scan index</a>
+        </div>
+        <ul class="bar-list">
+          {{range sliceBuckets .SourceMix 5}}
+          <li class="bar-list__row">
+            <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+            <span class="bar-list__value">{{.Count}}</span>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--alt" style="width: {{percent .Count (maxBucketCount $.SourceMix)}}%;"></span></div>
+          </li>
+          {{else}}
+          <li class="muted">No source mix is available yet.</li>
+          {{end}}
+        </ul>
+      </article>
+
+      <article class="insight-panel">
+        <div class="insight-panel__head">
+          <p class="eyebrow">Coverage mix</p>
+          <a class="text-link" href="/hosts">Host inventory</a>
+        </div>
+        <ul class="bar-list">
+          {{range sliceBuckets .CoverageMix 5}}
+          <li class="bar-list__row">
+            <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+            <span class="bar-list__value">{{.Count}}</span>
+            <div class="bar-list__track"><span class="bar-list__fill" style="width: {{percent .Count (maxBucketCount $.CoverageMix)}}%;"></span></div>
+          </li>
+          {{else}}
+          <li class="muted">No coverage mix is available yet.</li>
+          {{end}}
+        </ul>
+      </article>
+
+      <article class="insight-panel">
+        <div class="insight-panel__head">
+          <p class="eyebrow">Severity spread</p>
+          <a class="text-link" href="/findings">Findings</a>
+        </div>
+        <div class="severity-stack">
+          <div class="severity-stack__row">
+            <span>Critical</span>
+            <strong>{{.FindingTotals.Critical}}</strong>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--critical" style="width: {{percent .FindingTotals.Critical .FindingTotals.Total}}%;"></span></div>
+          </div>
+          <div class="severity-stack__row">
+            <span>High</span>
+            <strong>{{.FindingTotals.High}}</strong>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--high" style="width: {{percent .FindingTotals.High .FindingTotals.Total}}%;"></span></div>
+          </div>
+          <div class="severity-stack__row">
+            <span>Medium</span>
+            <strong>{{.FindingTotals.Medium}}</strong>
+            <div class="bar-list__track"><span class="bar-list__fill" style="width: {{percent .FindingTotals.Medium .FindingTotals.Total}}%;"></span></div>
+          </div>
+          <div class="severity-stack__row">
+            <span>Low</span>
+            <strong>{{.FindingTotals.Low}}</strong>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--low" style="width: {{percent .FindingTotals.Low .FindingTotals.Total}}%;"></span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="insight-panel">
+        <div class="insight-panel__head">
+          <p class="eyebrow">Job pipeline</p>
+          <a class="text-link" href="#jobs">Queue</a>
+        </div>
+        <ul class="bar-list">
+          {{range sliceBuckets .JobStatus 5}}
+          <li class="bar-list__row">
+            <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+            <span class="bar-list__value">{{.Count}}</span>
+            <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--warm" style="width: {{percent .Count (maxBucketCount $.JobStatus)}}%;"></span></div>
+          </li>
+          {{else}}
+          <li class="muted">No managed jobs have been queued yet.</li>
+          {{end}}
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  {{template "readiness_board" .Readiness}}
+
+  <section class="section-grid section-grid--workspace">
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Sources</p>
+          <h2>Recent source intake</h2>
+        </div>
+        <a class="text-link" href="/scans">Open scan index</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Name</th><th>Kind</th><th>Hosts</th><th>Imported</th><th></th></tr>
+        </thead>
+        <tbody>
+          {{range .Scans}}
+          <tr>
+            <td><a href="/scans/{{.ID}}">{{.Name}}</a><span class="table-meta">{{.Source}}</span></td>
+            <td>{{.Kind}}</td>
+            <td>{{.LiveHosts}}</td>
+            <td>{{.ImportedAt}}</td>
+            <td><a class="text-link" href="{{.Download}}">Download</a></td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="muted">No scans have been imported yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Queue ledger</p>
+          <h2>Recent jobs</h2>
+        </div>
+        <a class="text-link" href="#jobs">All jobs</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Plugin</th><th>Status</th><th>Targets</th><th>Created</th></tr>
+        </thead>
+        <tbody>
+          {{range .RecentJobs}}
+          <tr>
+            <td>{{.PluginLabel}}</td>
+            <td><span class="severity severity--{{.StatusTone}}">{{.Status}}</span></td>
+            <td>{{.TargetSummary}}{{if .Summary}}<span class="table-meta">{{.Summary}}</span>{{end}}{{if .Error}}<span class="table-meta">{{.Error}}</span>{{end}}</td>
+            <td>{{.CreatedAt}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No jobs have been queued yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel panel--context">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Recommended actions</p>
+          <h2>Launch follow-up runs</h2>
+        </div>
+      </div>
+      <div class="run-profile-grid">
+        {{range .RunProfiles}}
+        <form class="run-profile-card" action="/plugins/run" method="post">
+          <input type="hidden" name="plugin" value="{{.PluginID}}">
+          <input type="hidden" name="target_mode" value="profile">
+          <input type="hidden" name="profile_scope" value="{{.ProfileScope}}">
+          <input type="hidden" name="return_to" value="/workspace">
+          {{if .Severity}}<input type="hidden" name="severity" value="{{.Severity}}">{{end}}
+          {{if .Profile}}<input type="hidden" name="profile" value="{{.Profile}}">{{end}}
+          {{if .CrawlDepth}}<input type="hidden" name="crawl_depth" value="{{.CrawlDepth}}">{{end}}
+          <span class="run-profile-card__mode">{{.ModeLabel}}</span>
+          <strong>{{.Label}}</strong>
+          <p>{{.Detail}}</p>
+          <div class="run-profile-card__foot">
+            <span>{{.Count}} {{.CountLabel}}</span>
+            <button type="submit" {{if eq .Count 0}}disabled{{end}}>Queue</button>
+          </div>
+        </form>
+        {{end}}
+      </div>
+      <div class="workspace-stack workspace-stack--dense">
+        <div class="workspace-stack__block">
+          <p class="eyebrow">Landing</p>
+          <form class="inline-form" action="/workspace/preferences" method="post">
+            <select name="default_landing">
+              {{range .Preferences.LandingOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+            <button type="submit">Save</button>
+          </form>
+        </div>
+
+        <div class="workspace-stack__block">
+          <p class="eyebrow">Analyst state</p>
+          <ul class="compact-list">
+            <li><span>Saved views</span><span>{{len .SavedViews}}</span></li>
+            <li><span>Campaigns</span><span>{{len .Campaigns}}</span></li>
+            <li><span>Hosts with findings</span><span>{{.Workspace.FindingHosts}}</span></li>
+            <li><span>Managed jobs</span><span>{{.Workspace.JobCount}}</span></li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Observation ledger</p>
+          <h2>Recent workspace activity</h2>
+        </div>
+      </div>
+      <ul class="activity-list">
+        {{range .Observations}}
+        <li>
+          <div>
+            <a href="{{.Href}}">{{.Label}}</a>
+            <p>{{.Detail}}</p>
+          </div>
+          <span class="table-meta">{{.At}}</span>
+        </li>
+        {{else}}
+        <li class="muted">No events have been recorded yet.</li>
+        {{end}}
+      </ul>
+    </article>
+
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Analyst state</p>
+          <h2>Saved views and campaigns</h2>
+        </div>
+      </div>
+      <div class="split-stacks">
+        <div>
+          <h3>Saved views</h3>
+          <ul class="compact-list">
+            {{range .SavedViews}}
+            <li><a href="{{.Href}}">{{.Name}}</a><span>{{.CreatedAt}}</span></li>
+            {{else}}
+            <li class="muted">No saved views yet.</li>
+            {{end}}
+          </ul>
+        </div>
+        <div>
+          <h3>Campaigns</h3>
+          <ul class="compact-list">
+            {{range .Campaigns}}
+            <li><span>{{.Name}}</span><span>{{.CreatedAt}}</span></li>
+            {{else}}
+            <li class="muted">No campaigns yet.</li>
+            {{end}}
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="panel workspace-ops" id="jobs">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Operations</p>
+        <h2>Imports, custom runs, and full queue history</h2>
+      </div>
+    </div>
+    <p class="panel-copy">Heavy controls stay below the dashboard. Open only what you need: ingest more source material, launch a custom scanner profile, or inspect the full managed-job ledger.</p>
+
+    <details class="disclosure" id="import" {{if .IsEmpty}}open{{end}}>
+      <summary>Import source material</summary>
+      <form class="stack-form" action="/workspace/import" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="return_to" value="/workspace">
+        <label>
+          <span>Filesystem path</span>
+          <input name="path" placeholder="/absolute/path, directory, or glob">
+        </label>
+        <label>
+          <span>Upload file</span>
+          <input type="file" name="scan_file" accept=".xml,.nessus,.csv,.json,.jsonl,.ndjson,.txt,.lst,.list">
+        </label>
+        <label>
+          <span>Source label</span>
+          <input name="name" placeholder="Optional label override">
+        </label>
+        <button type="submit">Import source</button>
+      </form>
+    </details>
+
+    <details class="disclosure" id="custom-run">
+      <summary>Queue custom managed run</summary>
+      <form class="stack-form" action="/plugins/run" method="post">
+        <input type="hidden" name="return_to" value="/workspace">
+        <label>
+          <span>Plugin</span>
+          <select name="plugin">
+            {{range .Plugins}}
+            <option value="{{.ID}}">{{.Label}}</option>
+            {{end}}
+          </select>
+        </label>
+        <div class="form-split">
+          <label>
+            <span>Target mode</span>
+            <select name="target_mode">
+              <option value="profile">Profile</option>
+              <option value="manual">Manual</option>
+              <option value="filter">Current filter</option>
+            </select>
+          </label>
+          <label>
+            <span>Profile slice</span>
+            <select name="profile_scope">
+              <option value="all-hosts">All live hosts</option>
+              <option value="domains">Declared domains</option>
+              <option value="web">Web</option>
+              <option value="coverage-gap">Coverage gap</option>
+              <option value="high-exposure">High exposure</option>
+              <option value="database">Database</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          <span>Targets</span>
+          <textarea name="targets" rows="5" placeholder="One IP, CIDR, hostname, or URL per line"></textarea>
+        </label>
+        <div class="form-split">
+          <label>
+            <span>Severity</span>
+            <input name="severity" placeholder="critical,high">
+          </label>
+          <label>
+            <span>Tool profile</span>
+            <select name="profile">
+              <option value="">Tool default</option>
+              {{range .Plugins}}
+              {{if .Profiles}}
+              <optgroup label="{{.Label}}">
+                {{range .Profiles}}
+                <option value="{{.ID}}">{{.Label}}</option>
+                {{end}}
+              </optgroup>
+              {{end}}
+              {{end}}
+            </select>
+          </label>
+        </div>
+        <div class="form-split">
+          <label>
+            <span>SQLMap crawl depth</span>
+            <input name="crawl_depth" value="1" placeholder="1">
+          </label>
+          <label>
+            <span>SQLMap level / risk</span>
+            <div class="form-split">
+              <input name="level" placeholder="level">
+              <input name="risk" placeholder="risk">
+            </div>
+          </label>
+        </div>
+        <div class="form-split">
+          <label>
+            <span>API base URL</span>
+            <input name="api_base_url" placeholder="Optional connector endpoint override">
+          </label>
+          <label>
+            <span>Scan or site ID</span>
+            <input name="scan_id" placeholder="Tenable / Nessus scan ID">
+          </label>
+        </div>
+        <div class="form-split">
+          <label>
+            <span>Burp site ID</span>
+            <input name="site_id" placeholder="Reuse an existing Burp site">
+          </label>
+          <label>
+            <span>Connector config IDs</span>
+            <input name="scan_config_ids" placeholder="Burp scan config IDs, comma-separated">
+          </label>
+        </div>
+        <label>
+          <span>Burp parent folder ID</span>
+          <input name="parent_id" placeholder="Optional Burp folder ID">
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" name="api_insecure" value="true">
+          <span>Allow self-signed connector TLS</span>
+        </label>
+        <label>
+          <span>Extra arguments</span>
+          <input name="extra_args" placeholder="Optional raw CLI arguments">
+        </label>
+        <button type="submit">Queue enrichment</button>
+      </form>
+    </details>
+
+    <details class="disclosure" id="queue-history">
+      <summary>Open full queue history</summary>
+      <table class="data-table">
+        <thead>
+          <tr><th>Plugin</th><th>Status</th><th>Summary</th><th>Created</th></tr>
+        </thead>
+        <tbody>
+          {{range .Jobs}}
+          <tr>
+            <td>{{.PluginLabel}}</td>
+            <td><span class="severity severity--{{.StatusTone}}">{{.Status}}</span></td>
+            <td>{{.TargetSummary}}{{if .Summary}}<span class="table-meta">{{.Summary}}</span>{{end}}{{if .Error}}<span class="table-meta">{{.Error}}</span>{{end}}</td>
+            <td>{{.CreatedAt}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No job history yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </details>
+  </section>
+{{template "shell_end" .}}
+{{end}}

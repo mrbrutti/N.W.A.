@@ -1,0 +1,153 @@
+{{define "host"}}
+{{template "shell_start" .}}
+  <section class="section-grid section-grid--summary">
+    <article class="panel panel--hero">
+      <p class="eyebrow">Host dossier</p>
+      <h2>{{.Host.DisplayName}}</h2>
+      <p class="panel-copy mono">{{.Host.IP}}</p>
+    </article>
+    <div class="metric-grid metric-grid--compact">
+      <article class="metric-card"><span>OS</span><strong>{{.Host.OS}}</strong><small>{{.Host.Status}}</small></article>
+      <article class="metric-card"><span>Open ports</span><strong>{{.Host.OpenPortCount}}</strong><small>{{.Host.ServiceCount}} services</small></article>
+      <article class="metric-card"><span>Findings</span><strong>{{.Host.Findings.Total}}</strong><small>{{.Host.Coverage.Label}}</small></article>
+    </div>
+  </section>
+
+  {{if .Scope}}
+  <section class="panel panel--context">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Scan scope</p>
+        <h2>Observed in {{.Scope.Scan.Name}}</h2>
+      </div>
+      <a class="text-link" href="/scans/{{.Scope.Scan.ID}}">Open scan</a>
+    </div>
+    <div class="stat-strip">
+      <div><span>Open ports</span><strong>{{.Scope.ObservedOpenPorts}}</strong></div>
+      <div><span>Findings</span><strong>{{.Scope.ObservedFindings.Total}}</strong></div>
+      <div><span>Imported</span><strong>{{.Scope.Scan.ImportedAt}}</strong></div>
+    </div>
+  </section>
+  {{end}}
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Analyst</p><h2>Notes and tags</h2></div>
+      </div>
+      <form class="stack-form" action="/hosts/annotate" method="post">
+        <input type="hidden" name="host" value="{{.Host.IP}}">
+        <input type="hidden" name="return_to" value="/hosts/{{.Host.IP}}{{if .Scope}}?scan={{.Scope.Scan.ID}}{{end}}">
+        <label>
+          <span>Tags</span>
+          <input name="tags" value="{{join .Host.Tags ", "}}" placeholder="critical, mail, vpn">
+        </label>
+        <label>
+          <span>Note</span>
+          <textarea name="note" rows="4" placeholder="Analyst note"></textarea>
+        </label>
+        <button type="submit">Save annotation</button>
+      </form>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Provenance</p><h2>Related scans and jobs</h2></div>
+      </div>
+      <ul class="compact-list">
+        {{range .Host.SourceScans}}
+        <li><span>{{.}}</span></li>
+        {{end}}
+      </ul>
+      <hr>
+      <ul class="compact-list">
+        {{range .Jobs}}
+        <li><span>{{.PluginLabel}} · {{.Status}}</span><span>{{.CreatedAt}}</span></li>
+        {{else}}
+        <li class="muted">No recent jobs targeted this host.</li>
+        {{end}}
+      </ul>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Ports</p><h2>Open service surface</h2></div>
+      </div>
+      <table class="data-table data-table--dense">
+        <thead>
+          <tr><th>Port</th><th>State</th><th>Service</th><th>Product</th><th>Version</th></tr>
+        </thead>
+        <tbody>
+          {{range .Host.Ports}}
+          <tr>
+            <td><a href="/ports/{{.Protocol}}/{{.Port}}">{{.Protocol}}/{{.Port}}</a></td>
+            <td>{{.State}}</td>
+            <td>{{.Service}}</td>
+            <td>{{.Product}}</td>
+            <td>{{.Version}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Findings</p><h2>Attached enrichment</h2></div>
+      </div>
+      <table class="data-table data-table--dense">
+        <thead>
+          <tr><th>Finding</th><th>Severity</th><th>Target</th></tr>
+        </thead>
+        <tbody>
+          {{range .Host.NucleiFindings}}
+          <tr>
+            <td>{{.Name}}<span class="table-meta">{{.Source}}{{if .TemplateID}} · {{.TemplateID}}{{end}}</span></td>
+            <td><span class="severity severity--{{.SeverityTone}}">{{.Severity}}</span></td>
+            <td class="mono">{{.Target}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="3" class="muted">No findings are attached to this host.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Route and timing</p><h2>Traceroute context</h2></div>
+      </div>
+      <ul class="compact-list">
+        {{range .Host.Trace}}
+        <li><span>TTL {{.TTL}} · {{.Address}}</span><span>{{.RTT}}</span></li>
+        {{else}}
+        <li class="muted">No traceroute data was imported for this host.</li>
+        {{end}}
+      </ul>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Observations</p><h2>Recent host activity</h2></div>
+      </div>
+      <ul class="activity-list">
+        {{range .Host.Observations}}
+        <li>
+          <div>
+            <span>{{.Label}}</span>
+            <p>{{.Detail}}</p>
+          </div>
+          <span class="table-meta">{{.At}}</span>
+        </li>
+        {{else}}
+        <li class="muted">No observation records are attached to this host yet.</li>
+        {{end}}
+      </ul>
+    </article>
+  </section>
+{{template "shell_end" .}}
+{{end}}

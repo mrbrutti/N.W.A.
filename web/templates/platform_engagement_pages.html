@@ -1,0 +1,1328 @@
+{{define "platform_engagement_overview"}}
+{{template "platform_page_start" .}}
+{{template "platform_stats" .Stats}}
+
+<section class="platform-panel-grid four-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Evidence lanes</p>
+    <h2>Source mix</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .SourceMix}}' data-chart-tone="accent"></div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Finding posture</p>
+    <h2>Severity spread</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .SeverityMix}}' data-chart-tone="severity"></div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Service surface</p>
+    <h2>Top services</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .ServiceMix}}' data-chart-tone="accent"></div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Run queue</p>
+    <h2>Status mix</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .RunStatusMix}}' data-chart-tone="accent"></div>
+  </article>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Recent sources</p>
+        <h2>Imported evidence</h2>
+      </div>
+      <a class="platform-inline-link" href="{{.Engagement.SourcesHref}}">Open sources</a>
+    </div>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Name</th><th>Scanner</th><th>Hosts</th><th>Imported</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentSources}}
+        <tr><td><strong>{{.Name}}</strong><small>{{.Kind}}</small></td><td>{{.Scanner}}</td><td>{{.LiveHosts}}</td><td>{{.ImportedAt}}</td></tr>
+        {{else}}
+        <tr><td colspan="4">No sources yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "recent_sources")}}
+  </article>
+
+  <article class="platform-panel" data-live-stream="/api/v1/engagements/{{.Engagement.Slug}}/stream">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Operations</p>
+        <h2>Execution queue</h2>
+      </div>
+      <a class="platform-inline-link" href="{{.Engagement.CampaignsHref}}">Open campaigns</a>
+    </div>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Tool</th><th>Status</th><th>Stage</th><th>Targets</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentRuns}}
+        <tr>
+          <td><strong>{{.ToolLabel}}</strong><small>{{.WorkerMode}} · {{.WorkerZone}}</small></td>
+          <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+          <td>{{.Stage}}</td>
+          <td>{{.TargetCount}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">No runs queued yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "recent_runs")}}
+  </article>
+</section>
+
+<section class="platform-panel-grid three-up">
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Zones</p>
+        <h2>Navigation slices</h2>
+      </div>
+      <a class="platform-inline-link" href="{{.Engagement.ZonesHref}}">Open zones</a>
+    </div>
+    <div class="platform-chart" data-bucket-chart='{{json .ZoneMix}}' data-chart-tone="accent"></div>
+  </article>
+
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Top hosts</p>
+        <h2>Priority systems</h2>
+      </div>
+      <a class="platform-inline-link" href="{{.Engagement.HostsHref}}">Open hosts</a>
+    </div>
+    <ul class="platform-list">
+      {{range .TopHosts}}
+      <li>
+        <a href="{{.Href}}">
+          <strong>{{.DisplayName}}</strong>
+          <small>{{.IP}} · {{.OpenPorts}} ports · {{.Findings}} findings</small>
+        </a>
+        <span class="platform-pill tone-{{.ExposureTone}}">{{.Exposure}}</span>
+      </li>
+      {{else}}
+      <li>No hosts projected yet.</li>
+      {{end}}
+    </ul>
+  </article>
+
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Top findings</p>
+        <h2>Highest signal</h2>
+      </div>
+      <a class="platform-inline-link" href="{{.Engagement.FindingsHref}}">Open findings</a>
+    </div>
+    <ul class="platform-list">
+      {{range .TopFindings}}
+      <li>
+        <a href="{{.Href}}">
+          <strong>{{.Name}}</strong>
+          <small>{{.Source}} · {{.Occurrences}} occurrences</small>
+        </a>
+        <span class="platform-pill tone-{{.SeverityTone}}">{{.Severity}}</span>
+      </li>
+      {{else}}
+      <li>No findings projected yet.</li>
+      {{end}}
+    </ul>
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_scope"}}
+{{template "platform_page_start" .}}
+{{template "platform_stats" .Stats}}
+
+<section class="platform-panel-grid sidebar-layout">
+  <article class="platform-panel">
+    <p class="platform-kicker">Add scope</p>
+    <h2>Normalize and queue</h2>
+    <form method="post" action="/engagements/{{.Engagement.Slug}}/scope" class="platform-form-grid">
+      <label><span>Campaign name</span><input type="text" name="name" value="Expansion"></label>
+      <label class="platform-span-all"><span>Scope</span><textarea name="scope" rows="8" placeholder="CIDRs, IPs, domains, hostnames"></textarea></label>
+      <button class="platform-primary-button" type="submit">Add scope</button>
+    </form>
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Execution slices</p>
+    <h2>Chunk inventory</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Name</th><th>Stage</th><th>Status</th><th>Targets</th></tr>
+      </thead>
+      <tbody>
+        {{range .Chunks}}
+        <tr>
+          <td><strong>{{.Name}}</strong><small>{{.Kind}}</small></td>
+          <td>{{.Stage}}</td>
+          <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+          <td>{{.Size}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">No scope chunks yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "chunks")}}
+  </article>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Seeds</p>
+    <h2>Declared inputs</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Value</th><th>Kind</th><th>Added</th></tr>
+      </thead>
+      <tbody>
+        {{range .Seeds}}
+        <tr><td><strong>{{.Value}}</strong><small>{{.Detail}}</small></td><td>{{.Kind}}</td><td>{{.CreatedAt}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No seeds yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "seeds")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Approvals</p>
+    <h2>Operator gates</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Summary</th><th>Status</th><th>Role</th></tr>
+      </thead>
+      <tbody>
+        {{range .Approvals}}
+        <tr>
+          <td><strong>{{.Summary}}</strong><small>{{.Detail}}</small></td>
+          <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+          <td>{{.RequiredClass}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="3">No approvals recorded.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "approvals")}}
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_zones"}}
+{{template "platform_page_start" .}}
+{{template "platform_stats" .Stats}}
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Zones</p>
+        <h2>Derived network groups</h2>
+      </div>
+      <span class="platform-note">{{if .SelectedZone}}Filtered{{else}}All zones{{end}}</span>
+    </div>
+    <div class="platform-chart" data-bucket-chart='{{json .ZoneMix}}' data-chart-tone="accent"></div>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Zone</th><th>Kind</th><th>Hosts</th></tr>
+      </thead>
+      <tbody>
+        {{range .Zones}}
+        <tr>
+          <td><a href="/engagements/{{$.Engagement.Slug}}/zones?zone={{.ID}}"><strong>{{.Name}}</strong></a><small>{{.Scope}}</small></td>
+          <td>{{.Kind}}</td>
+          <td>{{.HostCount}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="3">No zones derived yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "zones")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Hosts</p>
+    <h2>Selected slice</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Host</th><th>OS</th><th>Ports</th><th>Findings</th></tr>
+      </thead>
+      <tbody>
+        {{range .Hosts}}
+        <tr>
+          <td><a href="{{.Href}}"><strong>{{.DisplayName}}</strong></a><small>{{.IP}}</small></td>
+          <td>{{.OS}}</td>
+          <td>{{.OpenPorts}}</td>
+          <td>{{.Findings}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">Select a zone to inspect its hosts.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "zone_hosts")}}
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_sources"}}
+{{template "platform_page_start" .}}
+{{template "platform_stats" .Stats}}
+
+<section class="platform-panel-grid sidebar-layout">
+  <article class="platform-panel">
+    <p class="platform-kicker">Import</p>
+    <h2>Add evidence</h2>
+    <form method="post" action="/engagements/{{.Engagement.Slug}}/sources" enctype="multipart/form-data" class="platform-form-grid">
+      <label class="platform-span-all"><span>Scan file</span><input type="file" name="scan_file" required></label>
+      <button class="platform-primary-button" type="submit">Import evidence</button>
+    </form>
+    <div class="platform-panel__stack">
+      <div class="platform-chart" data-bucket-chart='{{json .ScannerMix}}' data-chart-tone="accent"></div>
+      <div class="platform-chart" data-bucket-chart='{{json .RunStatusMix}}' data-chart-tone="accent"></div>
+    </div>
+  </article>
+
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Catalog</p>
+        <h2>Evidence sources</h2>
+      </div>
+      {{with index .Pagers "sources"}}<span class="platform-note">{{.Total}} sources</span>{{end}}
+    </div>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Name</th><th>Scanner</th><th>Hosts</th><th>Imported</th></tr>
+      </thead>
+      <tbody>
+        {{range .Sources}}
+        <tr><td><strong>{{.Name}}</strong><small>{{.Kind}}</small></td><td>{{.Scanner}}</td><td>{{.LiveHosts}}</td><td>{{.ImportedAt}}</td></tr>
+        {{else}}
+        <tr><td colspan="4">No sources imported.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "sources")}}
+  </article>
+</section>
+
+<section class="platform-panel">
+  <div class="platform-panel__head">
+    <div>
+      <p class="platform-kicker">Runs</p>
+      <h2>Execution history</h2>
+    </div>
+  </div>
+  <div class="platform-chart" data-bucket-chart='{{json .ToolMix}}' data-chart-tone="accent"></div>
+  <table class="platform-table">
+    <thead>
+      <tr><th>Tool</th><th>Status</th><th>Stage</th><th>Summary</th></tr>
+    </thead>
+    <tbody>
+      {{range .Runs}}
+      <tr>
+        <td><strong>{{.ToolLabel}}</strong><small>{{.WorkerMode}} · {{.WorkerZone}}</small></td>
+        <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+        <td>{{.Stage}}</td>
+        <td>{{.Summary}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="4">No runs recorded.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "platform_pagination" (index .Pagers "runs")}}
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_hosts"}}
+{{template "platform_page_start" .}}
+{{template "platform_stats" .Stats}}
+
+<section class="platform-toolbar">
+  <form method="get" action="/engagements/{{.Engagement.Slug}}/hosts" class="platform-inline-form">
+    <input type="search" name="query" value="{{.Query}}" placeholder="Search IP, name, or OS">
+    <select name="zone">{{range .ZoneOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>{{end}}</select>
+    <button class="platform-primary-button" type="submit">Filter hosts</button>
+  </form>
+</section>
+
+<section class="platform-panel-grid three-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Exposure</p>
+    <h2>Host posture</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .ExposureMix}}' data-chart-tone="accent"></div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Operating systems</p>
+    <h2>Fingerprint mix</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .OSMix}}' data-chart-tone="accent"></div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Zones</p>
+    <h2>Active filter space</h2>
+    <ul class="platform-list">
+      {{range .Zones}}
+      <li>
+        <a href="/engagements/{{$.Engagement.Slug}}/hosts?zone={{.ID}}">
+          <strong>{{.Name}}</strong>
+          <small>{{.Kind}}</small>
+        </a>
+        <span>{{.HostCount}}</span>
+      </li>
+      {{else}}
+      <li>No zones available.</li>
+      {{end}}
+    </ul>
+    {{template "platform_pagination" (index .Pagers "host_zones")}}
+  </article>
+</section>
+
+<section class="platform-panel">
+  <div class="platform-panel__head">
+    <div>
+      <p class="platform-kicker">Hosts</p>
+      <h2>Canonical inventory</h2>
+    </div>
+    {{with index .Pagers "hosts"}}<span class="platform-note">{{.Total}} hosts in view</span>{{end}}
+  </div>
+  <table class="platform-table">
+    <thead>
+      <tr><th>Host</th><th>OS</th><th>Zones</th><th>Ports</th><th>Findings</th><th>Exposure</th></tr>
+    </thead>
+    <tbody>
+      {{range .Hosts}}
+      <tr>
+        <td><a href="{{.Href}}"><strong>{{.DisplayName}}</strong></a><small>{{.IP}} · {{.Coverage}} · {{.SourceCount}} sources</small></td>
+        <td>{{.OS}}</td>
+        <td>{{.ZoneCount}}</td>
+        <td>{{.OpenPorts}}</td>
+        <td>{{.Findings}}</td>
+        <td><span class="platform-pill tone-{{.ExposureTone}}">{{.Exposure}}</span></td>
+      </tr>
+      {{else}}
+      <tr><td colspan="6">No hosts match the current slice.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "platform_pagination" (index .Pagers "hosts")}}
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_ports"}}
+{{template "platform_page_start" .}}
+{{template "platform_stats" .Stats}}
+
+<section class="platform-toolbar">
+  <form method="get" action="/engagements/{{.Engagement.Slug}}/ports" class="platform-inline-form">
+    <input type="search" name="query" value="{{.Query}}" placeholder="Search port label or service">
+    <button class="platform-primary-button" type="submit">Filter ports</button>
+  </form>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Services</p>
+    <h2>Service concentration</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .ServiceMix}}' data-chart-tone="accent"></div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Ports</p>
+    <h2>Most exposed ports</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .PortMix}}' data-chart-tone="accent"></div>
+  </article>
+</section>
+
+<section class="platform-panel">
+  <div class="platform-panel__head">
+    <div>
+      <p class="platform-kicker">Ports</p>
+      <h2>Global service inventory</h2>
+    </div>
+    {{with index .Pagers "ports"}}<span class="platform-note">{{.Total}} rows</span>{{end}}
+  </div>
+  <table class="platform-table">
+    <thead>
+      <tr><th>Port</th><th>Service</th><th>Hosts</th><th>Findings</th></tr>
+    </thead>
+    <tbody>
+      {{range .Ports}}
+      <tr>
+        <td><a href="{{.Href}}"><strong>{{.Label}}</strong></a></td>
+        <td>{{.Service}}</td>
+        <td>{{.Hosts}}</td>
+        <td>{{.Findings}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="4">No ports projected yet.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "platform_pagination" (index .Pagers "ports")}}
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_findings"}}
+{{template "platform_page_start" .}}
+{{template "platform_stats" .Stats}}
+
+<section class="platform-toolbar">
+  <form method="get" action="/engagements/{{.Engagement.Slug}}/findings" class="platform-inline-form">
+    <input type="search" name="query" value="{{.Query}}" placeholder="Search name, template, or source">
+    <select name="severity">{{range .SeverityOptions}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>{{end}}</select>
+    <button class="platform-primary-button" type="submit">Filter findings</button>
+  </form>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Severity</p>
+    <h2>Finding distribution</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .SeverityMix}}' data-chart-tone="severity"></div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Sources</p>
+    <h2>Scanner contribution</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .SourceMix}}' data-chart-tone="accent"></div>
+  </article>
+</section>
+
+<section class="platform-panel">
+  <div class="platform-panel__head">
+    <div>
+      <p class="platform-kicker">Findings</p>
+      <h2>Grouped evidence</h2>
+    </div>
+    {{with index .Pagers "findings"}}<span class="platform-note">{{.Total}} groups</span>{{end}}
+  </div>
+  <table class="platform-table">
+    <thead>
+      <tr><th>Definition</th><th>Severity</th><th>Occurrences</th><th>Hosts</th><th>Ports</th><th>Seen</th></tr>
+    </thead>
+    <tbody>
+      {{range .Findings}}
+      <tr>
+        <td><a href="{{.Href}}"><strong>{{.Name}}</strong></a><small>{{.Source}} · {{.TemplateID}}</small></td>
+        <td><span class="platform-pill tone-{{.SeverityTone}}">{{.Severity}}</span></td>
+        <td>{{.Occurrences}}</td>
+        <td>{{.Hosts}}</td>
+        <td>{{.Ports}}</td>
+        <td>{{.FirstSeen}} → {{.LastSeen}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="6">No findings match the current slice.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "platform_pagination" (index .Pagers "findings")}}
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_campaigns"}}
+{{template "platform_page_start" .}}
+{{template "platform_stats" .Stats}}
+
+<section class="platform-panel">
+  <div class="platform-panel__head">
+    <div>
+      <p class="platform-kicker">Policy engine</p>
+      <h2>Engagement flow strategies</h2>
+    </div>
+    <span class="platform-note">{{len .Policies}} policies</span>
+  </div>
+  <div class="policy-grid">
+    {{range .Policies}}
+    <article class="policy-card {{if .Active}}is-active{{end}}">
+      <div class="policy-card__head">
+        <div>
+          <strong>{{.Name}}</strong>
+          <small>{{.Description}}</small>
+        </div>
+        {{if .Active}}
+        <span class="platform-pill tone-ok">Active</span>
+        {{else if $.CanOperate}}
+        <form method="post" action="/engagements/{{$.Engagement.Slug}}/campaigns">
+          <input type="hidden" name="action" value="activate_policy">
+          <input type="hidden" name="policy_id" value="{{.ID}}">
+          <input type="hidden" name="return_to" value="/engagements/{{$.Engagement.Slug}}/campaigns">
+          <button class="platform-ghost-button" type="submit">Activate</button>
+        </form>
+        {{end}}
+      </div>
+      <div class="policy-flow-preview">
+        {{range .Steps}}
+        <span class="policy-chip">{{.Label}}</span>
+        {{else}}
+        <span class="platform-note">No steps configured.</span>
+        {{end}}
+      </div>
+    </article>
+    {{else}}
+    <article class="policy-card">
+      <strong>No policies configured</strong>
+      <small>The engagement will fall back to the built-in balanced kickoff.</small>
+    </article>
+    {{end}}
+  </div>
+</section>
+
+{{if .CanOperate}}
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Active policy</p>
+        <h2>Flow editor</h2>
+      </div>
+      <span class="platform-note">Drag to reorder</span>
+    </div>
+    {{range .Policies}}
+    {{$policy := .}}
+    {{if .Active}}
+    <div class="policy-editor" data-policy-editor>
+      <ol class="policy-step-list" data-policy-steps>
+        {{range .Steps}}
+        <li class="policy-step" draggable="true" data-step-id="{{.ID}}">
+          <div class="policy-step__drag" aria-hidden="true">::</div>
+          <div class="policy-step__body">
+            <div class="policy-step__meta">
+              <strong>{{.Label}}</strong>
+              <span class="platform-pill tone-accent">{{.PluginID}}</span>
+            </div>
+            <small>{{.Trigger}} → {{.TargetSource}} {{if .MatchKinds}}· {{join .MatchKinds ", "}}{{end}}{{if .WhenPlugin}} · after {{.WhenPlugin}}{{end}}{{if .WhenProfile}}/{{.WhenProfile}}{{end}}</small>
+          </div>
+          <form method="post" action="/engagements/{{$.Engagement.Slug}}/campaigns">
+            <input type="hidden" name="action" value="remove_policy_step">
+            <input type="hidden" name="policy_id" value="{{$policy.ID}}">
+            <input type="hidden" name="step_id" value="{{.ID}}">
+            <input type="hidden" name="return_to" value="/engagements/{{$.Engagement.Slug}}/campaigns">
+            <button class="platform-ghost-button" type="submit">Remove</button>
+          </form>
+        </li>
+        {{else}}
+        <li class="policy-step policy-step--empty">No steps configured yet.</li>
+        {{end}}
+      </ol>
+      <form method="post" action="/engagements/{{$.Engagement.Slug}}/campaigns" class="policy-editor__save">
+        <input type="hidden" name="action" value="reorder_policy">
+        <input type="hidden" name="policy_id" value="{{$policy.ID}}">
+        <input type="hidden" name="return_to" value="/engagements/{{$.Engagement.Slug}}/campaigns">
+        <input type="hidden" name="step_order" value="{{range $index, $step := $policy.Steps}}{{if $index}}|{{end}}{{$step.ID}}{{end}}" data-policy-order>
+        <button class="platform-primary-button" type="submit">Save order</button>
+      </form>
+    </div>
+    {{end}}
+    {{end}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Add step</p>
+    <h2>Extend the active policy</h2>
+    {{range .Policies}}
+    {{$policy := .}}
+    {{if .Active}}
+    <form method="post" action="/engagements/{{$.Engagement.Slug}}/campaigns" class="platform-form-grid">
+      <input type="hidden" name="action" value="add_policy_step">
+      <input type="hidden" name="policy_id" value="{{$policy.ID}}">
+      <input type="hidden" name="return_to" value="/engagements/{{$.Engagement.Slug}}/campaigns">
+      <label>
+        <span>Label</span>
+        <input type="text" name="label" placeholder="Run default TCP scan on live hosts">
+      </label>
+      <label>
+        <span>Plugin</span>
+        <select name="plugin">
+          {{range $.Tools}}
+          <option value="{{.ID}}">{{.Label}}</option>
+          {{end}}
+        </select>
+      </label>
+      <label>
+        <span>Trigger</span>
+        <select name="trigger">
+          <option value="kickoff">Kickoff</option>
+          <option value="after-job">After job</option>
+        </select>
+      </label>
+      <label>
+        <span>Target source</span>
+        <select name="target_source">
+          <option value="chunk-values">Chunk values</option>
+          <option value="live-hosts">Live hosts from prior scan</option>
+          <option value="derived-targets">Targets derived by previous job</option>
+        </select>
+      </label>
+      <label>
+        <span>Chunk kinds</span>
+        <input type="text" name="match_kinds" placeholder="ip,cidr,domain,hostname">
+      </label>
+      <label>
+        <span>Stage</span>
+        <input type="text" name="stage" placeholder="default-ports">
+      </label>
+      <label>
+        <span>After plugin</span>
+        <input type="text" name="when_plugin" placeholder="nmap-enrich">
+      </label>
+      <label>
+        <span>After profile</span>
+        <input type="text" name="when_profile" placeholder="ping">
+      </label>
+      <label>
+        <span>Tool profile</span>
+        <select name="profile">
+          <option value="">Tool default</option>
+          {{range .Tools}}
+          {{if .Profiles}}
+          <optgroup label="{{.Label}}">
+            {{range .Profiles}}
+            <option value="{{.ID}}">{{.Label}}</option>
+            {{end}}
+          </optgroup>
+          {{end}}
+          {{end}}
+        </select>
+      </label>
+      <label>
+        <span>Ports</span>
+        <input type="text" name="ports" placeholder="80,443">
+      </label>
+      <label>
+        <span>Top UDP ports</span>
+        <input type="text" name="top_ports" value="200">
+      </label>
+      <label class="platform-span-all">
+        <span>Summary override</span>
+        <input type="text" name="summary" placeholder="Custom queue summary shown in runs and chunks">
+      </label>
+      <button class="platform-primary-button platform-span-all" type="submit">Add step</button>
+    </form>
+    {{end}}
+    {{end}}
+  </article>
+</section>
+{{end}}
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Automation</p>
+    <h2>Kickoff behavior</h2>
+    <ul class="platform-list">
+      <li><div><strong>IPs, CIDRs, and hostnames</strong><small>Start with `nmap -sn` ping discovery. When live systems land, queue the default TCP service scan automatically.</small></div></li>
+      <li><div><strong>Domains</strong><small>Run passive subdomain discovery, then validate and ping the discovered names before the default TCP follow-up.</small></div></li>
+      <li><div><strong>Deeper scans</strong><small>Full TCP and UDP expansion stay operator-triggered so you can choose when to escalate cost and noise.</small></div></li>
+    </ul>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Readiness</p>
+    <h2>Tool posture</h2>
+    <ul class="platform-list">
+      {{range .Readiness}}
+      <li>
+        <div>
+          <strong>{{.Label}}</strong>
+          <small>{{.Detail}}</small>
+        </div>
+        <span class="platform-pill tone-{{.Tone}}">{{.Ready}} / {{.Total}} ready</span>
+      </li>
+      {{else}}
+      <li>No tool readiness data available.</li>
+      {{end}}
+    </ul>
+  </article>
+</section>
+
+{{if .CanOperate}}
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <div class="platform-panel__head">
+      <div>
+        <p class="platform-kicker">Quick launch</p>
+        <h2>Operator profiles</h2>
+      </div>
+      <span class="platform-note">{{len .RunProfiles}} profiles</span>
+    </div>
+    <ul class="platform-list">
+      {{range .RunProfiles}}
+      <li>
+        <div>
+          <strong>{{.Label}}</strong>
+          <small>{{.Detail}}</small>
+          <small>{{.Count}} {{.CountLabel}} · {{.ModeLabel}}</small>
+        </div>
+        <form method="post" action="/engagements/{{$.Engagement.Slug}}/campaigns">
+          <input type="hidden" name="plugin" value="{{.PluginID}}">
+          <input type="hidden" name="target_mode" value="profile">
+          <input type="hidden" name="profile_scope" value="{{.ProfileScope}}">
+          <input type="hidden" name="profile" value="{{.Profile}}">
+          <input type="hidden" name="severity" value="{{.Severity}}">
+          <input type="hidden" name="crawl_depth" value="{{.CrawlDepth}}">
+          <input type="hidden" name="return_to" value="/engagements/{{$.Engagement.Slug}}/campaigns">
+          <button class="platform-ghost-button" type="submit">Run</button>
+        </form>
+      </li>
+      {{else}}
+      <li>No quick profiles available yet.</li>
+      {{end}}
+    </ul>
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Manual run</p>
+    <h2>Dispatch any supported tool</h2>
+    <form method="post" action="/engagements/{{.Engagement.Slug}}/campaigns" class="platform-form-grid">
+      <label>
+        <span>Tool</span>
+        <select name="plugin">
+          {{range .Tools}}
+          <option value="{{.ID}}">{{.Label}} · {{.Family}}</option>
+          {{end}}
+        </select>
+      </label>
+      <label>
+        <span>Target mode</span>
+        <select name="target_mode">
+          <option value="profile">Saved slice</option>
+          <option value="engagement">All live hosts</option>
+          <option value="manual">Manual targets</option>
+        </select>
+      </label>
+      <label>
+        <span>Saved slice</span>
+        <select name="profile_scope">
+          <option value="all-hosts">All live hosts</option>
+          <option value="domains">Declared domains</option>
+          <option value="web">Mapped web targets</option>
+          <option value="coverage-gap">Coverage gaps</option>
+          <option value="high-exposure">High exposure</option>
+          <option value="database">Database services</option>
+        </select>
+      </label>
+      <label>
+        <span>Tool profile</span>
+        <select name="profile">
+          <option value="">Tool default</option>
+          {{range .Tools}}
+          {{if .Profiles}}
+          <optgroup label="{{.Label}}">
+            {{range .Profiles}}
+            <option value="{{.ID}}">{{.Label}}</option>
+            {{end}}
+          </optgroup>
+          {{end}}
+          {{end}}
+        </select>
+      </label>
+      <label>
+        <span>Ports</span>
+        <input type="text" name="ports" placeholder="80,443,8080">
+      </label>
+      <label>
+        <span>Top UDP ports</span>
+        <input type="text" name="top_ports" value="200">
+      </label>
+      <label>
+        <span>Severity</span>
+        <input type="text" name="severity" placeholder="critical,high,medium">
+      </label>
+      <label>
+        <span>Templates</span>
+        <input type="text" name="templates" placeholder="/path/to/templates">
+      </label>
+      <label>
+        <span>Concurrency</span>
+        <input type="text" name="concurrency" placeholder="50">
+      </label>
+      <label>
+        <span>Crawl depth</span>
+        <input type="text" name="crawl_depth" placeholder="2">
+      </label>
+      <label class="platform-span-all">
+        <span>Manual targets</span>
+        <textarea name="targets" rows="5" placeholder="IPs, CIDRs, domains, hostnames, or URLs"></textarea>
+      </label>
+      <label class="platform-span-all">
+        <span>Extra arguments</span>
+        <input type="text" name="extra_args" placeholder="Additional CLI flags passed through to the tool">
+      </label>
+      <input type="hidden" name="return_to" value="/engagements/{{.Engagement.Slug}}/campaigns">
+      <button class="platform-primary-button platform-span-all" type="submit">Queue run</button>
+    </form>
+  </article>
+</section>
+{{else}}
+<section class="platform-panel">
+  <p class="platform-kicker">Operator controls</p>
+  <h2>Read-only access</h2>
+  <p class="platform-subtitle">Your role can review orchestration status, but only owners and editors can queue manual runs or escalate to deeper scan profiles.</p>
+</section>
+{{end}}
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Run status</p>
+    <h2>Queue posture</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .StatusMix}}' data-chart-tone="accent"></div>
+  </article>
+  <article class="platform-panel">
+    <p class="platform-kicker">Stages</p>
+    <h2>Chunk progression</h2>
+    <div class="platform-chart" data-bucket-chart='{{json .StageMix}}' data-chart-tone="accent"></div>
+  </article>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Chunks</p>
+    <h2>Orchestration slices</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Chunk</th><th>Stage</th><th>Status</th><th>Size</th></tr>
+      </thead>
+      <tbody>
+        {{range .Chunks}}
+        <tr>
+          <td><strong>{{.Name}}</strong><small>{{.Kind}}</small></td>
+          <td>{{.Stage}}</td>
+          <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+          <td>{{.Size}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">No chunks queued yet.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "chunks")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Runs</p>
+    <h2>Tool execution</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Tool</th><th>Status</th><th>Targets</th><th>Summary</th></tr>
+      </thead>
+      <tbody>
+        {{range .Runs}}
+        <tr>
+          <td><strong>{{.ToolLabel}}</strong><small>{{.Stage}}</small></td>
+          <td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td>
+          <td>{{.TargetCount}}</td>
+          <td>{{.Summary}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">No runs registered.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "runs")}}
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_host_detail"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Host dossier</p>
+    <h2>{{.Host.DisplayName}}</h2>
+    <div class="platform-health-grid">
+      <div><span>IP</span><strong>{{.Host.IP}}</strong></div>
+      <div><span>OS</span><strong>{{.Host.OS}}</strong></div>
+      <div><span>Open ports</span><strong>{{.Host.OpenPortCount}}</strong></div>
+      <div><span>Findings</span><strong>{{.Host.Findings.Total}}</strong></div>
+    </div>
+    <ul class="platform-list">
+      {{range .RelatedZones}}
+      <li><span>{{.Name}}</span><small>{{.Kind}} · {{.HostCount}} hosts</small></li>
+      {{else}}
+      <li>No zones attached.</li>
+      {{end}}
+    </ul>
+    {{template "platform_pagination" (index .Pagers "related_zones")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Service surface</p>
+    <h2>Observed ports</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Port</th><th>Service</th><th>State</th><th>Version</th></tr>
+      </thead>
+      <tbody>
+        {{range .Host.Ports}}
+        <tr><td>{{.Protocol}}/{{.Port}}</td><td>{{.Service}}</td><td>{{.State}}</td><td>{{.Version}}</td></tr>
+        {{else}}
+        <tr><td colspan="4">No ports recorded.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "host_ports")}}
+  </article>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Findings</p>
+    <h2>Grouped host evidence</h2>
+    <ul class="platform-list">
+      {{range .Findings}}
+      <li><a href="/engagements/{{$.Engagement.Slug}}/findings/{{.ID}}"><strong>{{.Name}}</strong><small>{{.Severity}} · {{.Occurrences}} occurrences</small></a></li>
+      {{else}}
+      <li>No grouped findings for this host.</li>
+      {{end}}
+    </ul>
+    {{template "platform_pagination" (index .Pagers "host_findings")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Recent runs</p>
+    <h2>Operational context</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Tool</th><th>Status</th><th>When</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentRuns}}
+        <tr><td>{{.ToolLabel}}</td><td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td><td>{{.CreatedAt}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No recent runs on this host.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "recent_runs")}}
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_port_detail"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Port profile</p>
+    <h2>{{.Port.Label}}</h2>
+    <div class="platform-health-grid">
+      <div><span>Service</span><strong>{{.Port.Service}}</strong></div>
+      <div><span>Hosts</span><strong>{{.Port.HostCount}}</strong></div>
+      <div><span>Findings</span><strong>{{.Port.FindingTotals.Total}}</strong></div>
+    </div>
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Affected systems</p>
+    <h2>Hosts</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Host</th><th>OS</th><th>Findings</th></tr>
+      </thead>
+      <tbody>
+        {{range .Port.Hosts}}
+        <tr><td><a href="/engagements/{{$.Engagement.Slug}}/hosts/{{.IP}}"><strong>{{.DisplayName}}</strong></a><small>{{.IP}}</small></td><td>{{.OS}}</td><td>{{.Findings}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No host evidence.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "port_hosts")}}
+  </article>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Related findings</p>
+    <h2>Evidence groups</h2>
+    <ul class="platform-list">
+      {{range .Port.RelatedFindings}}
+      <li><a href="/engagements/{{$.Engagement.Slug}}/findings/{{.ID}}"><strong>{{.Name}}</strong><small>{{.Severity}} · {{.Occurrences}} occurrences</small></a></li>
+      {{else}}
+      <li>No grouped findings tied to this port.</li>
+      {{end}}
+    </ul>
+    {{template "platform_pagination" (index .Pagers "port_findings")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Recent runs</p>
+    <h2>Operational context</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Tool</th><th>Status</th><th>Summary</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentRuns}}
+        <tr><td>{{.ToolLabel}}</td><td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td><td>{{.Summary}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No recent runs touching this port.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "recent_runs")}}
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_finding_detail"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Finding definition</p>
+    <h2>{{.Finding.Group.Name}}</h2>
+    <div class="platform-health-grid">
+      <div><span>Severity</span><strong>{{.Finding.Group.Severity}}</strong></div>
+      <div><span>Occurrences</span><strong>{{.Finding.Group.Occurrences}}</strong></div>
+      <div><span>Hosts</span><strong>{{.Finding.Group.Hosts}}</strong></div>
+      <div><span>Ports</span><strong>{{.Finding.Group.Ports}}</strong></div>
+    </div>
+    <p class="platform-subtitle">{{.Finding.Description}}</p>
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Occurrences</p>
+    <h2>Affected assets</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Host</th><th>Target</th><th>Port</th><th>Matched</th></tr>
+      </thead>
+      <tbody>
+        {{range .Finding.Occurrences}}
+        <tr>
+          <td><a href="/engagements/{{$.Engagement.Slug}}/hosts/{{.HostIP}}"><strong>{{.HostLabel}}</strong></a><small>{{.HostIP}}</small></td>
+          <td>{{.Target}}</td>
+          <td>{{if .Port}}{{.Port}}{{else}}0 / Host-level{{end}}</td>
+          <td>{{.MatchedAt}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">No occurrences recorded.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "finding_occurrences")}}
+  </article>
+</section>
+
+<section class="platform-panel">
+  <p class="platform-kicker">Recent runs</p>
+  <h2>Related execution</h2>
+  <table class="platform-table">
+    <thead>
+      <tr><th>Tool</th><th>Status</th><th>Summary</th></tr>
+    </thead>
+    <tbody>
+      {{range .RecentRuns}}
+      <tr><td>{{.ToolLabel}}</td><td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td><td>{{.Summary}}</td></tr>
+      {{else}}
+      <tr><td colspan="3">No related runs found.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "platform_pagination" (index .Pagers "recent_runs")}}
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_topology"}}
+{{template "platform_page_start" .}}
+<section class="platform-stat-strip">
+  <article class="platform-stat-card tone-accent"><p>Traced hosts</p><strong>{{.Summary.TracedHosts}}</strong><span>Hosts with route data</span></article>
+  <article class="platform-stat-card tone-warning"><p>Nodes</p><strong>{{.Summary.Nodes}}</strong><span>Unique topology nodes</span></article>
+  <article class="platform-stat-card tone-risk"><p>Edges</p><strong>{{.Summary.Edges}}</strong><span>Observed hop relationships</span></article>
+  <article class="platform-stat-card tone-accent"><p>Depth</p><strong>{{.Summary.MaxDepth}}</strong><span>Longest observed route</span></article>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Top nodes</p>
+    <h2>Most traversed</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Node</th><th>Seen</th><th>RTT</th></tr>
+      </thead>
+      <tbody>
+        {{range .TopNodes}}
+        <tr><td>{{.Label}}</td><td>{{.Count}}</td><td>{{.AvgRTT}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No topology data available.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "top_nodes")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Top edges</p>
+    <h2>Most common paths</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>From</th><th>To</th><th>Seen</th></tr>
+      </thead>
+      <tbody>
+        {{range .TopEdges}}
+        <tr><td>{{.Source}}</td><td>{{.Target}}</td><td>{{.Count}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No topology edges available.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "top_edges")}}
+  </article>
+</section>
+
+<section class="platform-panel">
+  <p class="platform-kicker">Exports</p>
+  <h2>Raw topology data</h2>
+  <ul class="platform-list">
+    {{range .Exports}}
+    <li><a href="{{.Href}}"><strong>{{.Label}}</strong><small>{{.Detail}}</small></a></li>
+    {{else}}
+    <li>No exports available.</li>
+    {{end}}
+  </ul>
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_recommendations"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Recommendations</p>
+    <h2>Next actions</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Title</th><th>Value</th><th>Approval</th></tr>
+      </thead>
+      <tbody>
+        {{range .Recommendations}}
+        <tr><td><strong>{{.Title}}</strong><small>{{.Detail}}</small></td><td>{{.ExpectedValue}}</td><td>{{.RequiredApproval}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No queued recommendations.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "recommendations")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Approvals</p>
+    <h2>Open gates</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>Summary</th><th>Status</th><th>Role</th></tr>
+      </thead>
+      <tbody>
+        {{range .Approvals}}
+        <tr><td><strong>{{.Summary}}</strong><small>{{.Detail}}</small></td><td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td><td>{{.RequiredClass}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No open approvals.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "approvals")}}
+  </article>
+</section>
+
+<section class="platform-panel">
+  <p class="platform-kicker">Recent runs</p>
+  <h2>Execution context</h2>
+  <table class="platform-table">
+    <thead>
+      <tr><th>Tool</th><th>Status</th><th>Summary</th></tr>
+    </thead>
+    <tbody>
+      {{range .RecentRuns}}
+      <tr><td>{{.ToolLabel}}</td><td><span class="platform-pill tone-{{.StatusTone}}">{{.Status}}</span></td><td>{{.Summary}}</td></tr>
+      {{else}}
+      <tr><td colspan="3">No recent runs.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "platform_pagination" (index .Pagers "recent_runs")}}
+</section>
+{{template "platform_page_end" .}}
+{{end}}
+
+{{define "platform_engagement_settings"}}
+{{template "platform_page_start" .}}
+<section class="platform-panel-grid sidebar-layout">
+  <article class="platform-panel">
+    <p class="platform-kicker">Memberships</p>
+    <h2>Add collaborator</h2>
+    <form method="post" action="/engagements/{{.Engagement.Slug}}/settings" class="platform-form-grid">
+      <label><span>User</span><input type="text" name="user" placeholder="username or email" required></label>
+      <label><span>Role</span><select name="role"><option value="owner">Owner</option><option value="editor">Editor</option><option value="viewer">Viewer</option></select></label>
+      <button class="platform-primary-button" type="submit">Add member</button>
+    </form>
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Current members</p>
+    <h2>Access control</h2>
+    <table class="platform-table">
+      <thead>
+        <tr><th>User</th><th>Role</th><th>Joined</th></tr>
+      </thead>
+      <tbody>
+        {{range .Memberships}}
+        <tr><td><strong>{{.DisplayName}}</strong><small>{{.Username}} · {{.Email}}</small></td><td>{{.Role}}</td><td>{{.JoinedAt}}</td></tr>
+        {{else}}
+        <tr><td colspan="3">No members found.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{template "platform_pagination" (index .Pagers "memberships")}}
+  </article>
+</section>
+
+<section class="platform-panel-grid two-up">
+  <article class="platform-panel">
+    <p class="platform-kicker">Tools</p>
+    <h2>Current readiness</h2>
+    <ul class="platform-list">
+      {{range .Tools}}
+      <li><span>{{.Label}}</span><small>{{.Status}} · {{.StatusDetail}}</small></li>
+      {{else}}
+      <li>No tools registered.</li>
+      {{end}}
+    </ul>
+    {{template "platform_pagination" (index .Pagers "settings_tools")}}
+  </article>
+
+  <article class="platform-panel">
+    <p class="platform-kicker">Connectors</p>
+    <h2>External platforms</h2>
+    <ul class="platform-list">
+      {{range .Connectors}}
+      <li><span>{{.Label}}</span><small>{{.Status}} · {{.StatusDetail}}</small></li>
+      {{else}}
+      <li>No connectors configured.</li>
+      {{end}}
+    </ul>
+    {{template "platform_pagination" (index .Pagers "settings_connectors")}}
+  </article>
+</section>
+{{template "platform_page_end" .}}
+{{end}}

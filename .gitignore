@@ -1,0 +1,8 @@
+.DS_Store
+.nwa-workspace/
+
+webapp/node_modules/
+webapp/dist/
+webapp/*.tsbuildinfo
+webapp/vite.config.js
+webapp/vite.config.d.ts
