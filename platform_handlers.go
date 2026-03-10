@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -315,7 +314,7 @@ func (app *application) handleEngagementRouter(writer http.ResponseWriter, reque
 	}
 	if request.Method == http.MethodGet {
 		switch section {
-		case "zones", "hosts", "ports", "findings":
+		case "overview", "zones", "hosts", "ports", "findings", "sources", "campaigns", "recommendations", "settings":
 			app.handleEngagementReactRedirect(writer, request)
 			return
 		}
@@ -380,126 +379,55 @@ func (app *application) handleEngagementRouter(writer http.ResponseWriter, reque
 
 func (app *application) handleEngagementCampaignRun(writer http.ResponseWriter, request *http.Request, user platformUserRecord, engagement platformEngagementRecord, role string) {
 	_ = user
-	if role == "viewer" {
-		http.Error(writer, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-		return
-	}
 	if err := request.ParseForm(); err != nil {
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 	action := chooseString(strings.TrimSpace(request.FormValue("action")), "queue_run")
-
-	workspace, _, err := app.center.loadWorkspaceByID(engagement.LegacyWorkspaceID)
-	if err != nil {
-		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
 	returnTo := chooseString(request.FormValue("return_to"), "/engagements/"+engagement.Slug+"/campaigns")
-
-	switch action {
-	case "activate_policy":
-		if err := workspace.setActivePolicy(strings.TrimSpace(request.FormValue("policy_id"))); err != nil {
-			http.Error(writer, err.Error(), http.StatusBadRequest)
-			return
-		}
-		_ = app.platform.syncEngagement(engagement)
-		http.Redirect(writer, request, returnTo, http.StatusSeeOther)
-		return
-	case "add_policy_step":
-		step := orchestrationStepRecord{
-			Label:        strings.TrimSpace(request.FormValue("label")),
-			Trigger:      strings.TrimSpace(request.FormValue("trigger")),
-			PluginID:     strings.TrimSpace(request.FormValue("plugin")),
-			Stage:        strings.TrimSpace(request.FormValue("stage")),
-			TargetSource: strings.TrimSpace(request.FormValue("target_source")),
-			MatchKinds:   policyKindsFromInput(request.FormValue("match_kinds")),
-			WhenPlugin:   strings.TrimSpace(request.FormValue("when_plugin")),
-			WhenProfile:  strings.TrimSpace(request.FormValue("when_profile")),
-			Summary:      strings.TrimSpace(request.FormValue("summary")),
-			Options: map[string]string{
-				"profile":   strings.TrimSpace(request.FormValue("profile")),
-				"ports":     strings.TrimSpace(request.FormValue("ports")),
-				"top_ports": strings.TrimSpace(request.FormValue("top_ports")),
-			},
-		}
-		if err := workspace.addPolicyStep(strings.TrimSpace(request.FormValue("policy_id")), step); err != nil {
-			http.Error(writer, err.Error(), http.StatusBadRequest)
-			return
-		}
-		http.Redirect(writer, request, returnTo, http.StatusSeeOther)
-		return
-	case "reorder_policy":
-		order := parseTargetLines(strings.ReplaceAll(request.FormValue("step_order"), "|", "\n"))
-		if err := workspace.reorderPolicySteps(strings.TrimSpace(request.FormValue("policy_id")), order); err != nil {
-			http.Error(writer, err.Error(), http.StatusBadRequest)
-			return
-		}
-		http.Redirect(writer, request, returnTo, http.StatusSeeOther)
-		return
-	case "remove_policy_step":
-		if err := workspace.removePolicyStep(strings.TrimSpace(request.FormValue("policy_id")), strings.TrimSpace(request.FormValue("step_id"))); err != nil {
-			http.Error(writer, err.Error(), http.StatusBadRequest)
-			return
-		}
-		http.Redirect(writer, request, returnTo, http.StatusSeeOther)
-		return
+	input := platformCampaignActionInput{
+		Action:        action,
+		PolicyID:      strings.TrimSpace(request.FormValue("policy_id")),
+		StepID:        strings.TrimSpace(request.FormValue("step_id")),
+		StepOrder:     parseTargetLines(strings.ReplaceAll(request.FormValue("step_order"), "|", "\n")),
+		Label:         strings.TrimSpace(request.FormValue("label")),
+		Trigger:       strings.TrimSpace(request.FormValue("trigger")),
+		PluginID:      strings.TrimSpace(request.FormValue("plugin")),
+		Stage:         strings.TrimSpace(request.FormValue("stage")),
+		TargetSource:  strings.TrimSpace(request.FormValue("target_source")),
+		MatchKinds:    policyKindsFromInput(request.FormValue("match_kinds")),
+		WhenPlugin:    strings.TrimSpace(request.FormValue("when_plugin")),
+		WhenProfile:   strings.TrimSpace(request.FormValue("when_profile")),
+		Summary:       strings.TrimSpace(request.FormValue("summary")),
+		TargetMode:    strings.TrimSpace(request.FormValue("target_mode")),
+		Targets:       parseTargetLines(request.FormValue("targets")),
+		ProfileScope:  strings.TrimSpace(request.FormValue("profile_scope")),
+		Severity:      strings.TrimSpace(request.FormValue("severity")),
+		Templates:     strings.TrimSpace(request.FormValue("templates")),
+		Concurrency:   strings.TrimSpace(request.FormValue("concurrency")),
+		Profile:       strings.TrimSpace(request.FormValue("profile")),
+		Ports:         strings.TrimSpace(request.FormValue("ports")),
+		TopPorts:      strings.TrimSpace(request.FormValue("top_ports")),
+		CrawlDepth:    strings.TrimSpace(request.FormValue("crawl_depth")),
+		Level:         strings.TrimSpace(request.FormValue("level")),
+		Risk:          strings.TrimSpace(request.FormValue("risk")),
+		APIBaseURL:    strings.TrimSpace(request.FormValue("api_base_url")),
+		ScanID:        strings.TrimSpace(request.FormValue("scan_id")),
+		SiteID:        strings.TrimSpace(request.FormValue("site_id")),
+		ParentID:      strings.TrimSpace(request.FormValue("parent_id")),
+		ScanConfigIDs: strings.TrimSpace(request.FormValue("scan_config_ids")),
+		APIInsecure:   strings.EqualFold(strings.TrimSpace(request.FormValue("api_insecure")), "true"),
+		ExtraArgs:     strings.TrimSpace(request.FormValue("extra_args")),
 	}
 
-	pluginID := strings.TrimSpace(request.FormValue("plugin"))
-	targetMode := strings.TrimSpace(request.FormValue("target_mode"))
-
-	var (
-		rawTargets []string
-		hostIPs    []string
-		summary    string
-	)
-
-	switch targetMode {
-	case "manual":
-		rawTargets = parseTargetLines(request.FormValue("targets"))
-		hostIPs = resolveKnownHosts(workspace.currentSnapshot(), rawTargets)
-		summary = fmt.Sprintf("manual scope · %d targets", len(rawTargets))
-	case "engagement":
-		rawTargets, hostIPs, summary = workspace.profileTargets(pluginID, "all-hosts")
-	default:
-		profileScope := strings.TrimSpace(request.FormValue("profile_scope"))
-		rawTargets, hostIPs, summary = workspace.profileTargets(pluginID, profileScope)
-	}
-
-	options := map[string]string{
-		"severity":        strings.TrimSpace(request.FormValue("severity")),
-		"templates":       strings.TrimSpace(request.FormValue("templates")),
-		"concurrency":     strings.TrimSpace(request.FormValue("concurrency")),
-		"profile":         strings.TrimSpace(request.FormValue("profile")),
-		"profile_scope":   strings.TrimSpace(request.FormValue("profile_scope")),
-		"ports":           strings.TrimSpace(request.FormValue("ports")),
-		"top_ports":       strings.TrimSpace(request.FormValue("top_ports")),
-		"crawl_depth":     strings.TrimSpace(request.FormValue("crawl_depth")),
-		"level":           strings.TrimSpace(request.FormValue("level")),
-		"risk":            strings.TrimSpace(request.FormValue("risk")),
-		"api_base_url":    strings.TrimSpace(request.FormValue("api_base_url")),
-		"scan_id":         strings.TrimSpace(request.FormValue("scan_id")),
-		"site_id":         strings.TrimSpace(request.FormValue("site_id")),
-		"parent_id":       strings.TrimSpace(request.FormValue("parent_id")),
-		"scan_config_ids": strings.TrimSpace(request.FormValue("scan_config_ids")),
-		"api_insecure":    strings.TrimSpace(request.FormValue("api_insecure")),
-		"extra_args":      strings.TrimSpace(request.FormValue("extra_args")),
-	}
-
-	if _, err := workspace.plugins.submitDetailed(pluginSubmission{
-		PluginID:   pluginID,
-		RawTargets: rawTargets,
-		HostIPs:    hostIPs,
-		Summary:    summary,
-		Options:    options,
-		WorkerMode: "central",
-	}); err != nil {
+	if err := app.runEngagementCampaignAction(engagement, role, input); err != nil {
+		if errors.Is(err, errPlatformForbidden) {
+			http.Error(writer, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
 		http.Error(writer, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	_ = app.platform.syncEngagement(engagement)
 	http.Redirect(writer, request, returnTo, http.StatusSeeOther)
 }
 
@@ -539,16 +467,10 @@ func (app *application) handleEngagementSourceImport(writer http.ResponseWriter,
 		return
 	}
 	defer file.Close()
-	workspace, _, err := app.center.loadWorkspaceByID(engagement.LegacyWorkspaceID)
-	if err != nil {
-		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if _, err := workspace.importUploadedScan(header.Filename, file); err != nil {
+	if err := app.importEngagementSourceFile(engagement, header.Filename, file); err != nil {
 		http.Error(writer, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_ = app.platform.syncEngagement(engagement)
 	http.Redirect(writer, request, "/engagements/"+engagement.Slug+"/sources", http.StatusSeeOther)
 }
 
@@ -557,7 +479,7 @@ func (app *application) handleEngagementMembershipAdd(writer http.ResponseWriter
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	if err := app.platform.addEngagementMember(user, engagement, request.FormValue("user"), request.FormValue("role")); err != nil {
+	if err := app.addEngagementMembership(user, engagement, request.FormValue("user"), request.FormValue("role")); err != nil {
 		http.Error(writer, err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -292,6 +292,7 @@ type PlatformRecommendationsAPI struct {
 
 type PlatformSettingsAPI struct {
 	Memberships PlatformListResponse[PlatformMembershipView] `json:"memberships"`
+	Users       PlatformListResponse[PlatformUserView]       `json:"users"`
 	Tools       PlatformListResponse[PlatformToolView]       `json:"tools"`
 	Connectors  PlatformListResponse[PlatformConnectorView]  `json:"connectors"`
 }

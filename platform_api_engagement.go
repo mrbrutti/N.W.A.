@@ -334,11 +334,119 @@ func (app *application) handleEngagementSettingsJSON(writer http.ResponseWriter,
 		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	users, err := app.platform.store.listUsers()
+	if err != nil {
+		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	userViews := make([]PlatformUserView, 0, len(users))
+	for _, item := range users {
+		userViews = append(userViews, platformUserView(item))
+	}
 	writeJSON(writer, http.StatusOK, PlatformSettingsAPI{
 		Memberships: paginateAPIItems(request, memberships),
+		Users:       paginateAPIItems(request, userViews),
 		Tools:       paginateAPIItems(request, tools),
 		Connectors:  paginateAPIItems(request, connectors),
 	})
+}
+
+func (app *application) handleEngagementSourceImportJSON(writer http.ResponseWriter, request *http.Request) {
+	context, ok := app.requireAPIEngagementContext(writer, request, false)
+	if !ok {
+		return
+	}
+	if err := request.ParseMultipartForm(64 << 20); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": "invalid multipart payload"})
+		return
+	}
+	file, header, err := request.FormFile("scan_file")
+	if err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": "scan_file is required"})
+		return
+	}
+	defer file.Close()
+	if err := app.importEngagementSourceFile(context.Engagement, header.Filename, file); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(writer, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+func (app *application) handleEngagementCampaignActionJSON(writer http.ResponseWriter, request *http.Request) {
+	context, ok := app.requireAPIEngagementContext(writer, request, false)
+	if !ok {
+		return
+	}
+	_, role, err := app.platform.requireEngagement(context.User, context.View.Slug)
+	if err != nil {
+		writeJSON(writer, http.StatusForbidden, map[string]string{"error": http.StatusText(http.StatusForbidden)})
+		return
+	}
+	var payload platformCampaignActionInput
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
+		return
+	}
+	if err := app.runEngagementCampaignAction(context.Engagement, role, payload); err != nil {
+		status := http.StatusBadRequest
+		if err == errPlatformForbidden {
+			status = http.StatusForbidden
+		}
+		writeJSON(writer, status, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(writer, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+func (app *application) handleEngagementApprovalJSON(writer http.ResponseWriter, request *http.Request) {
+	context, ok := app.requireAPIEngagementContext(writer, request, false)
+	if !ok {
+		return
+	}
+	if err := app.approveEngagementApproval(context.Engagement, request.PathValue("approvalID")); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(writer, http.StatusAccepted, map[string]string{"status": "approved"})
+}
+
+func (app *application) handleEngagementRecommendationLLMJSON(writer http.ResponseWriter, request *http.Request) {
+	context, ok := app.requireAPIEngagementContext(writer, request, false)
+	if !ok {
+		return
+	}
+	payload := struct {
+		CampaignID string `json:"campaignId"`
+	}{}
+	if request.Body != nil {
+		_ = json.NewDecoder(request.Body).Decode(&payload)
+	}
+	if err := app.requestEngagementLLMRecommendations(context.Engagement, payload.CampaignID); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(writer, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+func (app *application) handleEngagementMembershipJSON(writer http.ResponseWriter, request *http.Request) {
+	context, ok := app.requireAPIEngagementContext(writer, request, false)
+	if !ok {
+		return
+	}
+	payload := struct {
+		User string `json:"user"`
+		Role string `json:"role"`
+	}{}
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
+		return
+	}
+	if err := app.addEngagementMembership(context.User, context.Engagement, payload.User, payload.Role); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(writer, http.StatusCreated, map[string]string{"status": "created"})
 }
 
 func (app *application) handleEngagementEventsSSE(writer http.ResponseWriter, request *http.Request) {
