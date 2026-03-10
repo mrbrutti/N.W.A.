@@ -1,0 +1,160 @@
+{{define "port"}}
+{{template "shell_start" .}}
+  <section class="section-grid section-grid--summary">
+    <article class="panel panel--hero">
+      <p class="eyebrow">Port dossier</p>
+      <h2>{{.Port.Label}}</h2>
+      <p class="panel-copy">{{.Port.Service}} mapped across {{.Port.HostCount}} {{pluralize .Port.HostCount "host" "hosts"}} in the current workspace.</p>
+    </article>
+    <div class="metric-grid metric-grid--compact">
+      <article class="metric-card"><span>Hosts</span><strong>{{.Port.HostCount}}</strong><small>Inventory members on this port</small></article>
+      <article class="metric-card"><span>Findings</span><strong>{{.Port.FindingTotals.Total}}</strong><small>Attached to {{.Port.Label}}</small></article>
+      <article class="metric-card"><span>Definitions</span><strong>{{len .Port.RelatedFindings}}</strong><small>Grouped finding types</small></article>
+      <article class="metric-card"><span>Scans</span><strong>{{len .Port.RelatedScans}}</strong><small>Related provenance entries</small></article>
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--hosts-toolbar">
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Operator lanes</p><h2>Command, import, and connector paths</h2></div>
+      </div>
+      <div class="integration-lanes">
+        {{range .IntegrationLanes}}
+        <section class="integration-lane">
+          <div class="integration-lane__head">
+            <div>
+              <p class="eyebrow">{{.Label}}</p>
+              <h3>{{.Detail}}</h3>
+            </div>
+          </div>
+          <div class="integration-lane__grid">
+            {{range .Actions}}
+            <article class="integration-card">
+              <div class="integration-card__meta">
+                <span class="severity severity--{{.AvailabilityTone}}">{{.Availability}}</span>
+                <span class="table-meta">{{.Mode}} · {{.Family}}</span>
+              </div>
+              <strong>{{.Label}}</strong>
+              <p>{{.Description}}</p>
+              {{if gt .Count 0}}
+              <div class="tag-row">
+                <span class="tag">{{.Count}} hosts</span>
+              </div>
+              {{end}}
+              {{if .PluginID}}
+              <form class="integration-card__action" action="/plugins/run" method="post">
+                <input type="hidden" name="plugin" value="{{.PluginID}}">
+                <input type="hidden" name="target_mode" value="{{.TargetMode}}">
+                <input type="hidden" name="return_to" value="{{.ReturnTo}}">
+                {{if .Severity}}<input type="hidden" name="severity" value="{{.Severity}}">{{end}}
+                {{if .Profile}}<input type="hidden" name="profile" value="{{.Profile}}">{{end}}
+                {{if .CrawlDepth}}<input type="hidden" name="crawl_depth" value="{{.CrawlDepth}}">{{end}}
+                <textarea hidden name="targets">{{.Targets}}</textarea>
+                <button type="submit" {{if .Disabled}}disabled{{end}}>{{.ActionLabel}}</button>
+              </form>
+              {{else if .Href}}
+              <a class="text-link integration-card__link" href="{{.Href}}">{{.ActionLabel}}</a>
+              {{else}}
+              <span class="table-meta">{{.ActionLabel}}</span>
+              {{end}}
+            </article>
+            {{end}}
+          </div>
+        </section>
+        {{end}}
+      </div>
+    </article>
+
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Finding spread</p><h2>Severity on this port</h2></div>
+      </div>
+      <div class="severity-stack">
+        <div class="severity-stack__row">
+          <span>Critical</span>
+          <strong>{{.Port.FindingTotals.Critical}}</strong>
+          <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--critical" style="width: {{percent .Port.FindingTotals.Critical .Port.FindingTotals.Total}}%;"></span></div>
+        </div>
+        <div class="severity-stack__row">
+          <span>High</span>
+          <strong>{{.Port.FindingTotals.High}}</strong>
+          <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--high" style="width: {{percent .Port.FindingTotals.High .Port.FindingTotals.Total}}%;"></span></div>
+        </div>
+        <div class="severity-stack__row">
+          <span>Medium</span>
+          <strong>{{.Port.FindingTotals.Medium}}</strong>
+          <div class="bar-list__track"><span class="bar-list__fill" style="width: {{percent .Port.FindingTotals.Medium .Port.FindingTotals.Total}}%;"></span></div>
+        </div>
+        <div class="severity-stack__row">
+          <span>Low</span>
+          <strong>{{.Port.FindingTotals.Low}}</strong>
+          <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--low" style="width: {{percent .Port.FindingTotals.Low .Port.FindingTotals.Total}}%;"></span></div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Affected hosts</p><h2>Inventory on {{.Port.Label}}</h2></div>
+      </div>
+      <table class="data-table data-table--dense">
+        <thead>
+          <tr><th>Host</th><th>OS</th><th>Product</th><th>Version</th><th>Findings</th></tr>
+        </thead>
+        <tbody>
+          {{range .Port.Hosts}}
+          <tr>
+            <td><a href="{{.Href}}">{{.DisplayName}}</a><span class="table-meta mono">{{.IP}}</span></td>
+            <td>{{.OS}}</td>
+            <td>{{.Product}}</td>
+            <td>{{.Version}}</td>
+            <td>{{.Findings}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="muted">No hosts are attached to this port.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Related findings</p><h2>Definitions touching this service edge</h2></div>
+      </div>
+      <table class="data-table data-table--dense">
+        <thead>
+          <tr><th>Finding</th><th>Severity</th><th>Hosts</th><th>Last seen</th></tr>
+        </thead>
+        <tbody>
+          {{range .Port.RelatedFindings}}
+          <tr>
+            <td><a href="{{.Href}}">{{.Name}}</a><span class="table-meta">{{.Source}}{{if .TemplateID}} · {{.TemplateID}}{{end}}</span></td>
+            <td><span class="severity severity--{{.SeverityTone}}">{{.Severity}}</span></td>
+            <td>{{.Hosts}}</td>
+            <td>{{.LastSeen}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No grouped findings are currently tied to this port.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div><p class="eyebrow">Related scans</p><h2>Provenance touching this port</h2></div>
+    </div>
+    <ul class="compact-list">
+      {{range .Port.RelatedScans}}
+      <li><a href="/scans/{{.ID}}">{{.Name}}</a><span>{{.ImportedAt}}</span></li>
+      {{else}}
+      <li class="muted">No scan provenance could be resolved for this port.</li>
+      {{end}}
+    </ul>
+  </section>
+{{template "shell_end" .}}
+{{end}}

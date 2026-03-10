@@ -1,0 +1,63 @@
+{{define "topology"}}
+{{template "shell_start" .}}
+  <section class="section-grid section-grid--summary">
+    <article class="panel panel--hero">
+      <p class="eyebrow">Route topology</p>
+      <h2>Shared transit and route trees</h2>
+      <p class="panel-copy">Topology stays linked to the workspace hierarchy, but it remains an analysis surface rather than a primary entity index.</p>
+    </article>
+    <div class="metric-grid metric-grid--compact">
+      <article class="metric-card"><span>Traced hosts</span><strong>{{.Summary.TracedHosts}}</strong><small>Targets with route data</small></article>
+      <article class="metric-card"><span>Nodes</span><strong>{{.Summary.Nodes}}</strong><small>Distinct hops</small></article>
+      <article class="metric-card"><span>Edges</span><strong>{{.Summary.Edges}}</strong><small>Observed transitions</small></article>
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--graph">
+    <article class="panel panel--graph">
+      <div class="panel-head">
+        <div><p class="eyebrow">Graph</p><h2>Backbone and route tree</h2></div>
+      </div>
+      <div class="graph-toolbar">
+        <label><span>Mode</span><select data-graph-mode><option value="backbone">Backbone</option><option value="route">Route tree</option></select></label>
+        <label><span>Target</span><select data-graph-target></select></label>
+        <label><span>Min path frequency</span><input data-graph-threshold type="range" min="1" max="2" value="1"></label>
+        <label><span>Vertical spread</span><input data-graph-spacing type="range" min="48" max="120" value="72"></label>
+        <label><span>Curve bend</span><input data-graph-bend type="range" min="6" max="40" value="26"></label>
+      </div>
+      <div class="graph-toolbar graph-toolbar--secondary">
+        <label><input type="checkbox" data-graph-shared checked> Shared transit only</label>
+        <label><input type="checkbox" data-graph-collapse checked> Collapse providers</label>
+        <label><input type="checkbox" data-graph-prune checked> Prune single-use hops</label>
+        <label><input type="checkbox" data-graph-labels> Pin labels</label>
+        <input data-graph-search type="search" placeholder="Highlight node or provider">
+      </div>
+      <p class="graph-status" data-graph-status>Loading graph data…</p>
+      <div class="graph-stage" data-graph-root data-graph-endpoint="/api/graph"></div>
+    </article>
+
+    <aside class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Inspector</p><h2>Selected node</h2></div>
+      </div>
+      <div class="graph-detail" data-graph-detail>
+        <p class="graph-detail__empty">Hover or select a node or edge to inspect route details.</p>
+      </div>
+      <hr>
+      <h3>Top nodes</h3>
+      <ul class="compact-list">
+        {{range .TopNodes}}
+        <li><span>{{.Label}}</span><span>{{.Count}}</span></li>
+        {{end}}
+      </ul>
+      <hr>
+      <h3>Exports</h3>
+      <ul class="compact-list compact-list--links">
+        {{range .Exports}}
+        <li><a href="{{.Href}}">{{.Label}}</a><span>{{.Detail}}</span></li>
+        {{end}}
+      </ul>
+    </aside>
+  </section>
+{{template "shell_end" .}}
+{{end}}

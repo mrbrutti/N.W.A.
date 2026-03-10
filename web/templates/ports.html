@@ -1,0 +1,124 @@
+{{define "ports"}}
+{{template "shell_start" .}}
+  <section class="panel inventory-hero">
+    <div class="inventory-hero__lead">
+      <p class="eyebrow">Port inventory</p>
+      <h2>Recurring exposure by protocol and port</h2>
+      <p class="panel-copy">Work the service surface as a ranked inventory: isolate the slice, read the exposure mix, then open a port dossier when it needs follow-up.</p>
+    </div>
+    <div class="overview-stats">
+      {{range .Stats}}
+      <article class="metric-card metric-card--tight">
+        <span>{{.Label}}</span>
+        <strong>{{.Value}}</strong>
+        <small>{{.Detail}}</small>
+      </article>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--hosts-toolbar">
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Slice query</p><h2>Filter the port map</h2></div>
+      </div>
+      <form class="stack-form" action="/ports" method="get">
+        <div class="form-split">
+          <label>
+            <span>Search</span>
+            <input type="search" name="query" value="{{.Query}}" placeholder="443, http, finding-backed, watch">
+          </label>
+          <label>
+            <span>Sort</span>
+            <select name="sort">
+              {{range .SortOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+        </div>
+        <div class="inventory-query-actions">
+          <button type="submit">Run port query</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Current slice</p><h2>Port inventory posture</h2></div>
+      </div>
+      <div class="stat-strip">
+        <div><span>Results</span><strong>{{len .Ports}}</strong></div>
+        <div><span>Query</span><strong>{{if .Query}}{{.Query}}{{else}}All ports{{end}}</strong></div>
+        <div><span>Sorted by</span><strong>{{range .SortOptions}}{{if .Selected}}{{.Label}}{{end}}{{end}}</strong></div>
+      </div>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--three">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Service concentration</p><h2>Mapped services by host reach</h2></div>
+      </div>
+      <div class="bucket-chart" data-bucket-chart='{{json (sliceBuckets .ServiceBuckets 8)}}' data-chart-tone="accent" data-chart-empty="No service exposure is available for this slice."></div>
+      <p class="chart-caption">Click a bar to pivot the port inventory by service family.</p>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Host load</p><h2>Most repeated exposure edges</h2></div>
+      </div>
+      <div class="bucket-chart" data-bucket-chart='{{json (sliceBuckets .HostBuckets 8)}}' data-chart-tone="alt" data-chart-empty="No host load data is available for this slice."></div>
+      <p class="chart-caption">This graph ranks the distinct protocol and port groups by affected host count.</p>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Exposure posture</p><h2>Watchlist categories</h2></div>
+      </div>
+      <div class="bucket-chart" data-bucket-chart='{{json (sliceBuckets .ExposureBuckets 8)}}' data-chart-tone="warm" data-chart-empty="No exposure posture has been derived yet."></div>
+      <p class="chart-caption">Use the exposure graph as a quick way to isolate watch and finding-backed edges.</p>
+    </article>
+  </section>
+
+  <section class="panel panel--tight">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Port results</p>
+        <h2>{{len .Ports}} distinct protocol and port groups</h2>
+      </div>
+      <span class="muted">Global inventory across all imported scans and enrichments.</span>
+    </div>
+    <div class="inventory-table-wrap">
+      <table class="data-table data-table--dense inventory-table">
+        <thead>
+          <tr><th>Port</th><th>Service</th><th>Hosts</th><th>Findings</th><th>Scans</th><th>Exposure</th></tr>
+        </thead>
+        <tbody>
+          {{range .Ports}}
+          <tr>
+            <td>
+              <a class="inventory-host__title" href="{{.Href}}">{{.Label}}</a>
+            </td>
+            <td>
+              <div class="inventory-surface">
+                <strong>{{.Service}}</strong>
+                <span class="table-meta">Observed across repeated host exposures</span>
+              </div>
+            </td>
+            <td>{{.Hosts}}</td>
+            <td>{{.Findings}}</td>
+            <td>{{.Scans}}</td>
+            <td>
+              <span class="severity {{if eq .Exposure "high-interest"}}severity--risk{{else if eq .Exposure "watch"}}severity--warning{{else if eq .Exposure "finding-backed"}}severity--accent{{else}}severity--info{{end}}">{{.Exposure}}</span>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="6" class="muted">No ports match the current slice.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{{template "shell_end" .}}
+{{end}}

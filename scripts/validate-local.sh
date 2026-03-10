@@ -25,4 +25,14 @@ if [[ -f go.mod ]]; then
   go test ./...
 fi
 
+if [[ -f webapp/package-lock.json ]]; then
+  echo "==> Installing webapp dependencies"
+  npm --prefix webapp ci --no-fund --no-audit
+fi
+
+if [[ -f webapp/package.json ]]; then
+  echo "==> Building React webapp"
+  npm --prefix webapp run build
+fi
+
 echo "Local validation passed."

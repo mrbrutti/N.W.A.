@@ -1,0 +1,112 @@
+{{define "campaigns"}}
+{{template "shell_start" .}}
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Campaign board</p>
+        <h2>Track approvals, chunks, and active runs from one surface.</h2>
+      </div>
+    </div>
+    <div class="overview-stats">
+      {{range .Stats}}
+      <article class="metric-card metric-card--tight">
+        <span>{{.Label}}</span>
+        <strong>{{.Value}}</strong>
+        <small>{{.Detail}}</small>
+      </article>
+      {{end}}
+    </div>
+  </section>
+
+  {{template "readiness_board" .Readiness}}
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Campaigns</p><h2>Current orchestration</h2></div></div>
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Stage</th><th>Status</th><th>Targets</th><th>Created</th></tr></thead>
+        <tbody>
+          {{range .Campaigns}}
+          <tr>
+            <td>{{.Name}}<span class="table-meta">{{.Summary}}</span></td>
+            <td>{{.Stage}}</td>
+            <td><span class="severity severity--{{.StatusTone}}">{{.Status}}</span></td>
+            <td>{{.TargetCount}}</td>
+            <td>{{.CreatedAt}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="muted">No campaigns have been created yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Approvals</p><h2>Open gates</h2></div></div>
+      <ul class="activity-list">
+        {{range .Approvals}}
+        <li>
+          <div>
+            <strong>{{.Summary}}</strong>
+            <p>{{.Detail}}</p>
+          </div>
+          <span class="severity severity--{{.StatusTone}}">{{.Status}}</span>
+        </li>
+        {{else}}
+        <li class="muted">No approvals are open.</li>
+        {{end}}
+      </ul>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--two">
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Chunks</p><h2>Execution slices</h2></div></div>
+      <table class="data-table">
+        <thead><tr><th>Chunk</th><th>Stage</th><th>Size</th><th>Status</th><th>Runs</th></tr></thead>
+        <tbody>
+          {{range .Chunks}}
+          <tr>
+            <td>
+              {{.Name}}
+              <span class="table-meta">{{join .Values ", "}}</span>
+              {{if .Detail}}<span class="table-meta">{{.Detail}}</span>{{end}}
+            </td>
+            <td>{{.Stage}}</td>
+            <td>{{.Size}}</td>
+            <td><span class="severity severity--{{.StatusTone}}">{{.Status}}</span></td>
+            <td>{{len .RunIDs}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="muted">No execution chunks are available yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Recent runs</p><h2>Worker activity</h2></div></div>
+      <table class="data-table">
+        <thead><tr><th>Tool</th><th>Stage</th><th>Status</th><th>Targets</th><th>Worker</th></tr></thead>
+        <tbody>
+          {{range .Jobs}}
+          <tr>
+            <td>
+              {{.PluginLabel}}
+              <span class="table-meta">{{.Summary}}</span>
+              {{if .Error}}<span class="table-meta">{{.Error}}</span>{{end}}
+            </td>
+            <td>{{.Stage}}</td>
+            <td><span class="severity severity--{{.StatusTone}}">{{.Status}}</span></td>
+            <td>{{.TargetSummary}}</td>
+            <td>{{.WorkerMode}}{{if .WorkerZone}} · {{.WorkerZone}}{{end}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="muted">No runs have been queued yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+  </section>
+{{template "shell_end" .}}
+{{end}}

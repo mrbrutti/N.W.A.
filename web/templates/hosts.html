@@ -1,0 +1,326 @@
+{{define "hosts"}}
+{{template "shell_start" .}}
+  <section class="panel inventory-hero">
+    <div class="inventory-hero__lead">
+      <p class="eyebrow">Host inventory</p>
+      <h2>Canonical host inventory</h2>
+      <p class="panel-copy">Hosts stay central. Filter a slice, inspect its posture, launch follow-up runs against that slice, then work the dense inventory below.</p>
+    </div>
+    <div class="overview-stats">
+      {{range .SliceStats}}
+      <article class="metric-card metric-card--tight">
+        <span>{{.Label}}</span>
+        <strong>{{.Value}}</strong>
+        <small>{{.Detail}}</small>
+      </article>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--hosts-toolbar">
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Slice query</p><h2>Filter and pivot</h2></div>
+      </div>
+      <form class="stack-form" action="/hosts" method="get">
+        <div class="form-split">
+          <label>
+            <span>Search</span>
+            <input type="search" name="query" value="{{.Filter.Query}}" placeholder="linux, rdp, apache, 443">
+          </label>
+          <label>
+            <span>Scope</span>
+            <select name="scope">
+              {{range .ScopeOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+          <label>
+            <span>Sort</span>
+            <select name="sort">
+              {{range .SortOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+          <label>
+            <span>Rows</span>
+            <select name="page_size">
+              {{range .PageSizeOptions}}
+              <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+              {{end}}
+            </select>
+          </label>
+        </div>
+        <div class="inventory-query-actions">
+          <button type="submit">Run inventory query</button>
+          <select data-submit-on-change onchange="if (this.value) window.location.href=this.value">
+            <option value="">Open saved view</option>
+            {{range .SavedViews}}
+            <option value="{{.Href}}">{{.Name}}</option>
+            {{end}}
+          </select>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel panel--tight">
+      <div class="panel-head">
+        <div><p class="eyebrow">Current slice</p><h2>Launch follow-up runs</h2></div>
+      </div>
+      <div class="run-profile-grid run-profile-grid--actions">
+        <form class="run-profile-card" action="/plugins/run" method="post">
+          <input type="hidden" name="plugin" value="nmap-enrich">
+          <input type="hidden" name="query" value="{{.Filter.Query}}">
+          <input type="hidden" name="scope" value="{{.Filter.Scope}}">
+          <input type="hidden" name="sort" value="{{.Filter.Sort}}">
+          <input type="hidden" name="target_mode" value="filter">
+          <input type="hidden" name="profile" value="deep">
+          <span class="run-profile-card__mode">Coverage follow-up</span>
+          <strong>Nmap deep scan</strong>
+          <p>Run service detection, default scripts, OS detection, and traceroute against the current filtered host slice.</p>
+          <div class="run-profile-card__foot">
+            <span>{{.Results.Total}} hosts</span>
+            <button type="submit" {{if eq .Results.Total 0}}disabled{{end}}>Queue</button>
+          </div>
+        </form>
+
+        <form class="run-profile-card" action="/plugins/run" method="post">
+          <input type="hidden" name="plugin" value="nuclei">
+          <input type="hidden" name="query" value="{{.Filter.Query}}">
+          <input type="hidden" name="scope" value="{{.Filter.Scope}}">
+          <input type="hidden" name="sort" value="{{.Filter.Sort}}">
+          <input type="hidden" name="target_mode" value="filter">
+          <input type="hidden" name="severity" value="critical,high,medium">
+          <span class="run-profile-card__mode">HTTP validation</span>
+          <strong>Nuclei sweep</strong>
+          <p>Generate HTTP targets from the current slice and attach findings back to the canonical host inventory.</p>
+          <div class="run-profile-card__foot">
+            <span>{{.Results.Total}} hosts</span>
+            <button type="submit" {{if eq .Results.Total 0}}disabled{{end}}>Queue</button>
+          </div>
+        </form>
+
+        <form class="run-profile-card" action="/plugins/run" method="post">
+          <input type="hidden" name="plugin" value="sqlmap">
+          <input type="hidden" name="query" value="{{.Filter.Query}}">
+          <input type="hidden" name="scope" value="{{.Filter.Scope}}">
+          <input type="hidden" name="sort" value="{{.Filter.Sort}}">
+          <input type="hidden" name="target_mode" value="filter">
+          <input type="hidden" name="crawl_depth" value="1">
+          <span class="run-profile-card__mode">SQLi validation</span>
+          <strong>SQLMap probe</strong>
+          <p>Run SQLMap against HTTP roots inferred from the current slice and ingest likely SQL injection hits.</p>
+          <div class="run-profile-card__foot">
+            <span>{{.Results.Total}} hosts</span>
+            <button type="submit" {{if eq .Results.Total 0}}disabled{{end}}>Queue</button>
+          </div>
+        </form>
+
+        <form class="run-profile-card" action="/plugins/run" method="post">
+          <input type="hidden" name="plugin" value="nikto">
+          <input type="hidden" name="query" value="{{.Filter.Query}}">
+          <input type="hidden" name="scope" value="{{.Filter.Scope}}">
+          <input type="hidden" name="sort" value="{{.Filter.Sort}}">
+          <input type="hidden" name="target_mode" value="filter">
+          <input type="hidden" name="profile" value="basic">
+          <span class="run-profile-card__mode">Web validation</span>
+          <strong>Nikto baseline</strong>
+          <p>Run Nikto against HTTP roots inferred from the current slice and retain the raw output as workspace artifacts.</p>
+          <div class="run-profile-card__foot">
+            <span>{{.Results.Total}} hosts</span>
+            <button type="submit" {{if eq .Results.Total 0}}disabled{{end}}>Queue</button>
+          </div>
+        </form>
+      </div>
+    </article>
+  </section>
+
+  <section class="section-grid section-grid--hosts-insights">
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Open-port mix</p><h2>Port distribution</h2></div>
+        <a class="text-link" href="/ports">Ports</a>
+      </div>
+      <ul class="bar-list">
+        {{range sliceBuckets .TopPorts 6}}
+        <li class="bar-list__row">
+          <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+          <span class="bar-list__value">{{.Count}}</span>
+          <div class="bar-list__track"><span class="bar-list__fill" style="width: {{percent .Count (maxBucketCount $.TopPorts)}}%;"></span></div>
+        </li>
+        {{else}}
+        <li class="muted">No port distribution for this slice.</li>
+        {{end}}
+      </ul>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">OS mix</p><h2>Fingerprint distribution</h2></div>
+        <a class="text-link" href="/hosts?scope=os">OS</a>
+      </div>
+      <ul class="bar-list">
+        {{range sliceBuckets .TopOS 6}}
+        <li class="bar-list__row">
+          <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+          <span class="bar-list__value">{{.Count}}</span>
+          <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--alt" style="width: {{percent .Count (maxBucketCount $.TopOS)}}%;"></span></div>
+        </li>
+        {{else}}
+        <li class="muted">No OS distribution for this slice.</li>
+        {{end}}
+      </ul>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Service mix</p><h2>Mapped services</h2></div>
+        <a class="text-link" href="/hosts?scope=service">Services</a>
+      </div>
+      <ul class="bar-list">
+        {{range sliceBuckets .TopServices 6}}
+        <li class="bar-list__row">
+          <a class="bar-list__label" href="{{.Href}}">{{.Label}}</a>
+          <span class="bar-list__value">{{.Count}}</span>
+          <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--warm" style="width: {{percent .Count (maxBucketCount $.TopServices)}}%;"></span></div>
+        </li>
+        {{else}}
+        <li class="muted">No service distribution for this slice.</li>
+        {{end}}
+      </ul>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">Severity spread</p><h2>Findings in slice</h2></div>
+        <a class="text-link" href="/findings">Findings</a>
+      </div>
+      <div class="severity-stack">
+        <div class="severity-stack__row">
+          <span>Critical</span>
+          <strong>{{.FindingTotals.Critical}}</strong>
+          <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--critical" style="width: {{percent .FindingTotals.Critical .FindingTotals.Total}}%;"></span></div>
+        </div>
+        <div class="severity-stack__row">
+          <span>High</span>
+          <strong>{{.FindingTotals.High}}</strong>
+          <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--high" style="width: {{percent .FindingTotals.High .FindingTotals.Total}}%;"></span></div>
+        </div>
+        <div class="severity-stack__row">
+          <span>Medium</span>
+          <strong>{{.FindingTotals.Medium}}</strong>
+          <div class="bar-list__track"><span class="bar-list__fill" style="width: {{percent .FindingTotals.Medium .FindingTotals.Total}}%;"></span></div>
+        </div>
+        <div class="severity-stack__row">
+          <span>Low</span>
+          <strong>{{.FindingTotals.Low}}</strong>
+          <div class="bar-list__track"><span class="bar-list__fill bar-list__fill--low" style="width: {{percent .FindingTotals.Low .FindingTotals.Total}}%;"></span></div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="panel panel--tight">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Inventory results</p>
+        <h2>{{.Results.Total}} matching hosts</h2>
+      </div>
+      <div class="inventory-head-actions">
+        {{if .HasLatestDiff}}<span class="severity severity--accent">{{.LatestDiff.SummaryLine}}</span>{{end}}
+        <form class="inline-form" action="/views/save" method="post">
+          <input type="hidden" name="query" value="{{.Filter.Query}}">
+          <input type="hidden" name="scope" value="{{.Filter.Scope}}">
+          <input type="hidden" name="sort" value="{{.Filter.Sort}}">
+          <input type="hidden" name="page_size" value="{{.Filter.PageSize}}">
+          <input name="name" placeholder="Save current slice">
+          <button type="submit">Save</button>
+        </form>
+      </div>
+    </div>
+    <div class="inventory-export-row">
+      <span class="muted">{{.Results.Start}}-{{.Results.End}} of {{.Results.Total}}</span>
+      <div class="tag-row">
+        {{range .Exports}}
+        <a class="tag" href="{{.Href}}">{{.Label}}</a>
+        {{end}}
+      </div>
+    </div>
+    <div class="inventory-table-wrap">
+      <table class="data-table data-table--dense inventory-table">
+        <thead>
+          <tr><th>Host</th><th>Exposure</th><th>Coverage</th><th>Surface</th><th>Findings</th><th>Sources</th><th></th></tr>
+        </thead>
+        <tbody>
+          {{range .Results.Items}}
+          <tr class="inventory-table__row inventory-table__row--{{.Exposure.Tone}}">
+            <td>
+              <div class="inventory-host">
+                <a class="inventory-host__title" href="/hosts/{{.IP}}">{{.DisplayName}}</a>
+                <span class="table-meta mono">{{.IP}}</span>
+                {{if gt (len .Hostnames) 0}}<span class="table-meta">{{join .Hostnames ", "}}</span>{{end}}
+              </div>
+            </td>
+            <td>
+              <div class="inventory-posture">
+                <span class="severity severity--{{.Exposure.Tone}}">{{.Exposure.Label}}</span>
+                <span class="table-meta">{{.Exposure.Detail}}</span>
+                {{if .Exposure.CriticalPorts}}
+                <div class="tag-row">
+                  {{range .Exposure.CriticalPorts}}
+                  <span class="tag">{{.}}</span>
+                  {{end}}
+                </div>
+                {{end}}
+              </div>
+            </td>
+            <td>
+              <div class="inventory-posture">
+                <span class="severity severity--{{.Coverage.Level}}">{{.Coverage.Label}}</span>
+                <span class="table-meta">{{.Coverage.Detail}}</span>
+              </div>
+            </td>
+            <td>
+              <div class="inventory-surface">
+                <strong>{{.OpenPortCount}} ports</strong>
+                <span class="table-meta">{{.ServiceCount}} services{{if gt .HTTPTargets 0}} · {{.HTTPTargets}} web{{end}}</span>
+                <div class="tag-row">
+                  {{range .Ports}}
+                  <span class="tag">{{.Port}}{{if .Service}} · {{.Service}}{{end}}</span>
+                  {{end}}
+                  {{if gt .HiddenPortCount 0}}<span class="tag">+{{.HiddenPortCount}} more</span>{{end}}
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="inventory-findings">
+                <strong>{{.Findings.Total}}</strong>
+                <span class="table-meta">{{.Findings.Critical}} critical · {{.Findings.High}} high</span>
+              </div>
+            </td>
+            <td>
+              <div class="inventory-sources">
+                <strong>{{.SourceCount}}</strong>
+                <span class="table-meta">{{if eq .SourceCount 1}}source{{else}}sources{{end}}</span>
+              </div>
+            </td>
+            <td class="inventory-actions">
+              <a class="text-link" href="/hosts/{{.IP}}">Open</a>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="7" class="muted">No hosts match the current slice.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      {{range .Results.Links}}
+      <a class="pagination__link{{if .Active}} is-active{{end}}{{if .Disabled}} is-disabled{{end}}" href="{{.Href}}">{{.Label}}</a>
+      {{end}}
+    </div>
+  </section>
+{{template "shell_end" .}}
+{{end}}

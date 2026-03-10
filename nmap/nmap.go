@@ -1,34 +1,50 @@
 package nmap
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"os"
+	"slices"
 	"strings"
 )
 
 type Scan struct {
-	NmapRun   NmapRun  `xml:"nmaprun"`
-	ScanInfo  ScanInfo `xml:"scaninfo"`
-	Verbose   string   `xml:"verbose,attr"`
-	Debugging string   `xml:"debugging,attr"`
-	Hosts     []Host   `xml:"host"`
+	ScanInfo         ScanInfo
+	Verbose          string
+	Debugging        string
+	Hosts            []Host
+	Scanner          string
+	Args             string
+	Start            string
+	Startstr         string
+	Version          string
+	XMLOutputVersion string
 }
 
-type NmapRun struct {
-	Scanner          string `xml:"scanner,attr"`
-	Args             string `xml:"args,attr"`
-	Start            string `xml:"start,attr"`
-	Startstr         string `xml:"startstr,attr"`
-	Version          string `xml:"version,attr"`
-	XMLOutputVersion string `xml:"xmloutputversion,attr"`
+type rawScan struct {
+	ScanInfo         ScanInfo `xml:"scaninfo"`
+	Verbose          levelTag `xml:"verbose"`
+	Debugging        levelTag `xml:"debugging"`
+	Hosts            []Host   `xml:"host"`
+	Scanner          string   `xml:"scanner,attr"`
+	Args             string   `xml:"args,attr"`
+	Start            string   `xml:"start,attr"`
+	Startstr         string   `xml:"startstr,attr"`
+	Version          string   `xml:"version,attr"`
+	XMLOutputVersion string   `xml:"xmloutputversion,attr"`
+}
+
+type levelTag struct {
+	Level string `xml:"level,attr"`
 }
 
 type ScanInfo struct {
 	Type        string `xml:"type,attr"`
-	protocol    string `xml:"protocol,attr"`
-	numservices string `xml:"numservices,attr"`
-	services    string `xml:"services,attr"`
+	Protocol    string `xml:"protocol,attr"`
+	NumServices string `xml:"numservices,attr"`
+	Services    string `xml:"services,attr"`
 }
 
 type Host struct {
@@ -39,12 +55,17 @@ type Host struct {
 	HostNames     []HostName    `xml:"hostnames>hostname"`
 	Ports         []Port        `xml:"ports>port"`
 	OS            OS            `xml:"os"`
-	Distance      string        `xml:"distance>value,attr"`
+	Distance      string        `xml:"-"`
+	DistanceValue distanceTag   `xml:"distance"`
 	TCPSequence   TCPSequence   `xml:"tcpsequence"`
 	IPIDSequence  IPIDSequence  `xml:"ipidsequence"`
 	TCPTSSequence TCPTSSequence `xml:"tcptssequence"`
 	Trace         Trace         `xml:"trace"`
 	Times         Times         `xml:"times"`
+}
+
+type distanceTag struct {
+	Value string `xml:"value,attr"`
 }
 
 type Status struct {
@@ -60,10 +81,6 @@ type Address struct {
 type HostName struct {
 	Name string `xml:"name,attr"`
 	Type string `xml:"type,attr"`
-}
-
-type HostPorts struct {
-	Ports []Port `xml:"port"`
 }
 
 type Port struct {
@@ -168,166 +185,318 @@ type Times struct {
 	To     string `xml:"to,attr"`
 }
 
-// Returns only IPs that are live. 
-func (s *Scan) Alive() []Host {
-	alive_hosts := []Host{}
-	for _, host := range s.Hosts {
-		if host.Status.State == "up" {
-			alive_hosts = append(alive_hosts, host)
-		}
-	}
-	return alive_hosts
-}
-
-// Returns only IPs that are dead. 
-func (s *Scan) Dead() []Host {
-	alive_hosts := []Host{}
-	for _, host := range s.Hosts {
-		if host.Status.State == "down" {
-			alive_hosts = append(alive_hosts, host)
-		}
-	}
-	return alive_hosts
-}
-
 type OpenList struct {
 	Name string
 	Size int
 	Type string
 }
 
-func searchport(list []OpenList, port string) int {
-	for i, p := range list {
-		if p.Name == port {
-			return i
-		}
-	}
-	return -1
+type PartialParseError struct {
+	Cause          error
+	RecoveredHosts int
 }
 
-// returns a OpenPorts struct of ports and amount of hosts.
+func (e *PartialParseError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.RecoveredHosts <= 0 {
+		return e.Cause.Error()
+	}
+	return fmt.Sprintf("%v (recovered %d complete hosts)", e.Cause, e.RecoveredHosts)
+}
+
+func (e *PartialParseError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+func (s *Scan) Alive() []Host {
+	alive := make([]Host, 0, len(s.Hosts))
+	for _, host := range s.Hosts {
+		if host.Status.State == "up" {
+			alive = append(alive, host)
+		}
+	}
+	return alive
+}
+
+func (s *Scan) Dead() []Host {
+	dead := make([]Host, 0, len(s.Hosts))
+	for _, host := range s.Hosts {
+		if host.Status.State == "down" {
+			dead = append(dead, host)
+		}
+	}
+	return dead
+}
+
 func (s *Scan) OpenPorts() []OpenList {
-	open_ports := []OpenList{}
+	counts := map[string]int{}
 	for _, host := range s.Alive() {
-		for _, p := range host.OpenPorts() {
-			i := searchport(open_ports, p.Portid)
-			if i >= 0 {
-				open_ports[i].Size += 1
-			} else {
-				open_ports = append(open_ports, OpenList{p.Portid, 1, "port"})
-			}
+		for _, port := range host.OpenPorts() {
+			counts[port.Portid]++
 		}
 	}
-	return open_ports
+	return sortedOpenLists(counts, "port")
 }
 
-func searchos(list []OpenList, os string) int {
-	for i, p := range list {
-		if p.Name == os {
-			return i
-		}
-	}
-	return -1
-}
-
-// returns a OpenList struct of OSes and amount of hosts.
 func (s *Scan) OSList() []OpenList {
-	open_ports := []OpenList{}
+	counts := map[string]int{}
 	for _, host := range s.Alive() {
-		i := searchport(open_ports, host.OSGuess())
-		if i >= 0 {
-			open_ports[i].Size += 1
-		} else {
-			open_ports = append(open_ports, OpenList{host.OSGuess(), 1, "os"})
+		if guess := host.OSGuess(); guess != "" {
+			counts[guess]++
 		}
 	}
-	return open_ports
+	return sortedOpenLists(counts, "os")
 }
 
-// Return only IPs that have port X open.
 func (s *Scan) WithOpenPort(port string) []Host {
-	phosts := []Host{}
-	for _, h := range s.Alive() {
-		for _, p := range h.OpenPorts() {
-			if p.Portid == port {
-				phosts = append(phosts, h)
+	needle := strings.TrimSpace(strings.ToLower(port))
+	if needle == "" {
+		return nil
+	}
+
+	hosts := make([]Host, 0)
+	for _, host := range s.Alive() {
+		for _, openPort := range host.OpenPorts() {
+			if strings.EqualFold(openPort.Portid, needle) {
+				hosts = append(hosts, host)
+				break
 			}
 		}
 	}
-	return phosts
+	return hosts
 }
 
-// Return only IPs that have Service X open.
 func (s *Scan) WithService(service string) []Host {
-	phosts := []Host{}
-	for _, h := range s.Alive() {
-		for _, p := range h.OpenPorts() {
-			if strings.Contains(p.Service.Name, service) {
-				phosts = append(phosts, h)
-			}
-		}
-	}
-	return phosts
+	return s.filterOpenPortHosts(service, func(port Port, needle string) bool {
+		return containsFold(port.Service.Name, needle)
+	})
 }
 
-// Return only IPs that have Banner X open.
 func (s *Scan) WithBanner(banner string) []Host {
-	phosts := []Host{}
-	for _, h := range s.Alive() {
-		for _, p := range h.OpenPorts() {
-			if strings.Contains(p.Service.Product, banner) {
-				phosts = append(phosts, h)
-			}
-			if strings.Contains(p.Service.FingerPrint, banner) {
-				phosts = append(phosts, h)
-			}
-		}
-	}
-	return phosts
+	return s.filterOpenPortHosts(banner, func(port Port, needle string) bool {
+		return containsFold(port.Service.Product, needle) ||
+			containsFold(port.Service.FingerPrint, needle)
+	})
 }
 
-// Return only IPs that have Service X open.
-func (s *Scan) WithOS(ooss string) []Host {
-	phosts := []Host{}
-	for _, h := range s.Alive() {
-		if strings.Contains(h.OSGuess(), ooss) {
-			phosts = append(phosts, h)
+func (s *Scan) WithOS(query string) []Host {
+	needle := strings.TrimSpace(strings.ToLower(query))
+	if needle == "" {
+		return nil
+	}
+
+	matches := make([]Host, 0)
+	for _, host := range s.Alive() {
+		if containsFold(host.OSGuess(), needle) {
+			matches = append(matches, host)
 		}
 	}
-	return phosts
+	return matches
 }
 
-// Returns list of open ports. 
-//
-//
-func (p *Host) OpenPorts() []Port {
-	open_ports := []Port{}
-	for _, port := range p.Ports {
+func (h *Host) OpenPorts() []Port {
+	openPorts := make([]Port, 0, len(h.Ports))
+	for _, port := range h.Ports {
 		if port.State.State == "open" {
-			open_ports = append(open_ports, port)
+			openPorts = append(openPorts, port)
 		}
 	}
-	return open_ports
+	return openPorts
+}
+
+func (h *Host) HostnameLabels() []string {
+	labels := make([]string, 0, len(h.HostNames))
+	for _, hostName := range h.HostNames {
+		name := strings.TrimSpace(hostName.Name)
+		if name != "" {
+			labels = append(labels, name)
+		}
+	}
+	return labels
+}
+
+func (h *Host) PrimaryHostname() string {
+	labels := h.HostnameLabels()
+	if len(labels) == 0 {
+		return ""
+	}
+	return labels[0]
 }
 
 func (h *Host) OSGuess() string {
-	if len(h.OS.OSMatches) > 1 {
-		return h.OS.OSMatches[0].Name
+	if len(h.OS.OSMatches) > 0 {
+		return strings.TrimSpace(h.OS.OSMatches[0].Name)
 	}
 	return ""
 }
 
 func Parse(scan *Scan, filename string) (Scan, error) {
-	nmap, err := ioutil.ReadFile(filename)
+	parsed, err := ParseFile(filename)
 	if err != nil {
-		fmt.Printf("error: %v", err)
 		return *scan, err
+	}
+	*scan = parsed
+	return *scan, nil
+}
+
+func ParseFile(filename string) (Scan, error) {
+	payload, err := os.ReadFile(filename)
+	if err != nil {
+		return Scan{}, err
 	}
 
-	err = xml.Unmarshal(nmap, &scan)
-	if err != nil {
-		fmt.Printf("error: %v", err)
-		return *scan, err
+	return ParseBytes(payload)
+}
+
+func ParseBytes(payload []byte) (Scan, error) {
+	if len(payload) == 0 {
+		return Scan{}, nil
 	}
-	return *scan, nil
+
+	var raw rawScan
+	if err := xml.Unmarshal(payload, &raw); err != nil {
+		recovered, recoveredHosts := recoverScan(payload)
+		if recoveredHosts > 0 {
+			return recovered, &PartialParseError{
+				Cause:          err,
+				RecoveredHosts: recoveredHosts,
+			}
+		}
+		return Scan{}, err
+	}
+
+	return finalizeRawScan(raw), nil
+}
+
+func finalizeRawScan(raw rawScan) Scan {
+	for index := range raw.Hosts {
+		raw.Hosts[index].Distance = raw.Hosts[index].DistanceValue.Value
+	}
+
+	return Scan{
+		ScanInfo:         raw.ScanInfo,
+		Verbose:          raw.Verbose.Level,
+		Debugging:        raw.Debugging.Level,
+		Hosts:            raw.Hosts,
+		Scanner:          raw.Scanner,
+		Args:             raw.Args,
+		Start:            raw.Start,
+		Startstr:         raw.Startstr,
+		Version:          raw.Version,
+		XMLOutputVersion: raw.XMLOutputVersion,
+	}
+}
+
+func recoverScan(payload []byte) (Scan, int) {
+	decoder := xml.NewDecoder(bytes.NewReader(payload))
+	scan := Scan{}
+	recoveredHosts := 0
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return scan, recoveredHosts
+		}
+
+		start, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+
+		switch start.Name.Local {
+		case "nmaprun":
+			applyRootAttrs(&scan, start.Attr)
+		case "scaninfo":
+			scan.ScanInfo = scanInfoFromAttrs(start.Attr)
+		case "verbose":
+			scan.Verbose = attrValue(start.Attr, "level")
+		case "debugging":
+			scan.Debugging = attrValue(start.Attr, "level")
+		case "host":
+			var host Host
+			if err := decoder.DecodeElement(&host, &start); err != nil {
+				return scan, recoveredHosts
+			}
+			host.Distance = host.DistanceValue.Value
+			scan.Hosts = append(scan.Hosts, host)
+			recoveredHosts++
+		}
+	}
+
+	return scan, recoveredHosts
+}
+
+func applyRootAttrs(scan *Scan, attrs []xml.Attr) {
+	if scan == nil {
+		return
+	}
+	scan.Scanner = attrValue(attrs, "scanner")
+	scan.Args = attrValue(attrs, "args")
+	scan.Start = attrValue(attrs, "start")
+	scan.Startstr = attrValue(attrs, "startstr")
+	scan.Version = attrValue(attrs, "version")
+	scan.XMLOutputVersion = attrValue(attrs, "xmloutputversion")
+}
+
+func scanInfoFromAttrs(attrs []xml.Attr) ScanInfo {
+	return ScanInfo{
+		Type:        attrValue(attrs, "type"),
+		Protocol:    attrValue(attrs, "protocol"),
+		NumServices: attrValue(attrs, "numservices"),
+		Services:    attrValue(attrs, "services"),
+	}
+}
+
+func attrValue(attrs []xml.Attr, key string) string {
+	for _, attr := range attrs {
+		if attr.Name.Local == key {
+			return attr.Value
+		}
+	}
+	return ""
+}
+
+func (s *Scan) filterOpenPortHosts(query string, match func(Port, string) bool) []Host {
+	needle := strings.TrimSpace(strings.ToLower(query))
+	if needle == "" {
+		return nil
+	}
+
+	matches := make([]Host, 0)
+	for _, host := range s.Alive() {
+		for _, port := range host.OpenPorts() {
+			if match(port, needle) {
+				matches = append(matches, host)
+				break
+			}
+		}
+	}
+	return matches
+}
+
+func sortedOpenLists(counts map[string]int, kind string) []OpenList {
+	results := make([]OpenList, 0, len(counts))
+	for name, size := range counts {
+		results = append(results, OpenList{Name: name, Size: size, Type: kind})
+	}
+
+	slices.SortStableFunc(results, func(left, right OpenList) int {
+		if left.Size != right.Size {
+			return right.Size - left.Size
+		}
+		return strings.Compare(left.Name, right.Name)
+	})
+	return results
+}
+
+func containsFold(value string, needle string) bool {
+	return strings.Contains(strings.ToLower(value), needle)
 }

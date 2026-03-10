@@ -1,0 +1,79 @@
+{{define "recommendations"}}
+{{template "shell_start" .}}
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">Recommendation queue</p>
+        <h2>Use approval-backed recommendations to decide what the command center should do next.</h2>
+      </div>
+      <form action="/recommendations/llm" method="post">
+        <button type="submit">Generate planner suggestions</button>
+      </form>
+    </div>
+    <div class="overview-stats">
+      {{range .Stats}}
+      <article class="metric-card metric-card--tight">
+        <span>{{.Label}}</span>
+        <strong>{{.Value}}</strong>
+        <small>{{.Detail}}</small>
+      </article>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="section-grid section-grid--summary">
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Recommendations</p><h2>Next actions</h2></div></div>
+      <table class="data-table">
+        <thead><tr><th>Recommendation</th><th>Expected value</th><th>Confidence</th><th>Approval</th></tr></thead>
+        <tbody>
+          {{range .Recommendations}}
+          <tr>
+            <td>{{.Title}}<span class="table-meta">{{.Detail}}</span><span class="table-meta">{{join .ToolIDs ", "}}</span></td>
+            <td><span class="severity severity--{{.StatusTone}}">{{.ExpectedValue}}</span></td>
+            <td>{{.Confidence}}</td>
+            <td>{{.RequiredApproval}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="4" class="muted">No recommendations are queued yet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Campaign context</p><h2>Current campaigns</h2></div></div>
+      <ul class="activity-list">
+        {{range .Campaigns}}
+        <li>
+          <div>
+            <strong>{{.Name}}</strong>
+            <p>{{.Stage}} · {{.Summary}}</p>
+          </div>
+          <span class="severity severity--{{.StatusTone}}">{{.Status}}</span>
+        </li>
+        {{else}}
+        <li class="muted">No campaign context is available yet.</li>
+        {{end}}
+      </ul>
+    </article>
+  </section>
+
+  <section class="panel panel--tight">
+    <div class="panel-head"><div><p class="eyebrow">Approvals</p><h2>Approval queue</h2></div></div>
+    <ul class="activity-list">
+      {{range .Approvals}}
+      <li>
+        <div>
+          <strong>{{.Summary}}</strong>
+          <p>{{.Detail}}</p>
+        </div>
+        <span class="severity severity--{{.StatusTone}}">{{.Status}}</span>
+      </li>
+      {{else}}
+      <li class="muted">No approval records are present.</li>
+      {{end}}
+    </ul>
+  </section>
+{{template "shell_end" .}}
+{{end}}

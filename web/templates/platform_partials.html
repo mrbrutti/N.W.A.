@@ -1,0 +1,224 @@
+{{define "platform_head"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Page.Title}} · N.W.A.</title>
+  <meta name="description" content="{{.Page.Description}}">
+  <link rel="stylesheet" href="/css/app.css">
+  <script defer src="/js/app.js"></script>
+</head>
+{{end}}
+
+{{define "platform_page_start"}}
+{{template "platform_head" .}}
+<body class="platform-body {{if .IsAdminArea}}platform-body--admin{{else}}platform-body--engagement{{end}}" data-page="{{.Page.Section}}" data-running-jobs="{{if .Engagement.ID}}{{.Engagement.RunningRuns}}{{else}}0{{end}}">
+  <main class="platform-shell">
+    <div class="platform-frame">
+      {{template "platform_sidebar" .}}
+      <section class="platform-main">
+        {{template "platform_menubar" .}}
+        {{template "platform_topbar" .}}
+{{end}}
+
+{{define "platform_page_end"}}
+      </section>
+    </div>
+  </main>
+</body>
+</html>
+{{end}}
+
+{{define "platform_sidebar"}}
+<aside class="platform-sidebar">
+  <div class="platform-sidebar__brand">
+    <a class="platform-brand-lockup" href="{{if .CurrentUser.IsAdmin}}/admin{{else}}/engagements{{end}}">
+      <span class="platform-brand-lockup__mark">NWA</span>
+      <span class="platform-brand-lockup__text">
+        <strong>Network Workbench</strong>
+        <small>{{if .IsAdminArea}}Admin Console{{else}}Engagement Workspace{{end}}</small>
+      </span>
+    </a>
+  </div>
+
+  <section class="platform-sidebar__card">
+    <p class="platform-kicker">{{if .Engagement.ID}}Current engagement{{else}}Current operator{{end}}</p>
+    <h2>{{if .Engagement.ID}}{{.Engagement.Name}}{{else}}{{.CurrentUser.DisplayName}}{{end}}</h2>
+    <p class="platform-subtitle">
+      {{if .Engagement.ID}}
+        {{if .Engagement.ScopeSummary}}{{.Engagement.ScopeSummary}}{{else}}{{.Page.Description}}{{end}}
+      {{else}}
+        {{.CurrentUser.Username}} · {{.CurrentUser.Role}}
+      {{end}}
+    </p>
+    {{if .Engagement.ID}}
+      <div class="platform-sidebar__metric-grid">
+        <div><span>Hosts</span><strong>{{.Engagement.HostCount}}</strong></div>
+        <div><span>Findings</span><strong>{{.Engagement.FindingCount}}</strong></div>
+        <div><span>Zones</span><strong>{{.Engagement.ZoneCount}}</strong></div>
+        <div><span>Running</span><strong>{{.Engagement.RunningRuns}}</strong></div>
+      </div>
+    {{end}}
+  </section>
+
+  {{if and .Engagement.ID .EngagementSwitch}}
+  <section class="platform-sidebar__section">
+    <header>
+      <p class="platform-kicker">Engagements</p>
+      <h3>Switch context</h3>
+    </header>
+    <nav class="platform-switcher">
+      {{range .EngagementSwitch}}
+        <a class="platform-switcher__link {{if eq $.Engagement.ID .ID}}is-active{{end}}" href="{{.OverviewHref}}">
+          <span>{{.Name}}</span>
+          <small>{{.HostCount}} hosts · {{.FindingCount}} findings</small>
+        </a>
+      {{end}}
+    </nav>
+  </section>
+  {{end}}
+
+  <section class="platform-sidebar__section">
+    <header>
+      <p class="platform-kicker">Current area</p>
+      <h3>{{.Page.Title}}</h3>
+    </header>
+    <p class="platform-subtitle">{{.Page.Description}}</p>
+  </section>
+
+  <section class="platform-sidebar__footer">
+    <div>
+      <p class="platform-kicker">Signed in</p>
+      <strong>{{.CurrentUser.DisplayName}}</strong>
+      <small>{{.CurrentUser.Role}}</small>
+    </div>
+    <form method="post" action="/logout">
+      <button class="platform-ghost-button" type="submit">Logout</button>
+    </form>
+  </section>
+</aside>
+{{end}}
+
+{{define "platform_menubar"}}
+{{if .TopMenuGroups}}
+<nav class="platform-menubar" aria-label="Primary navigation">
+  <div class="platform-menubar__brand">
+    <a class="platform-menubar__home" href="{{if .CurrentUser.IsAdmin}}/admin{{else}}/engagements{{end}}">NWA</a>
+    <div class="platform-menubar__context">
+      <strong>{{if .Engagement.ID}}{{.Engagement.Name}}{{else}}Admin Console{{end}}</strong>
+      <small>{{if .Engagement.ID}}{{.Engagement.ScopeSummary}}{{else}}Single-tenant control plane{{end}}</small>
+    </div>
+  </div>
+  <div class="platform-menubar__menus">
+    {{range .TopMenuGroups}}
+    <details class="platform-menu {{if .Active}}is-active{{end}}" data-platform-menu>
+      <summary>
+        <span>{{.Label}}</span>
+      </summary>
+      <div class="platform-menu__panel">
+        <div class="platform-menu__header">
+          <strong>{{.Label}}</strong>
+          <small>{{.Description}}</small>
+        </div>
+        {{range .Items}}
+        <a class="platform-menu__item {{if .Active}}is-active{{end}}" href="{{.Href}}">
+          <strong>{{.Label}}</strong>
+          <small>{{.Description}}</small>
+        </a>
+        {{end}}
+      </div>
+    </details>
+    {{end}}
+  </div>
+  <div class="platform-menubar__account">
+    <span>{{.CurrentUser.DisplayName}}</span>
+    <small>{{.CurrentUser.Role}}</small>
+  </div>
+</nav>
+{{end}}
+{{end}}
+
+{{define "platform_topbar"}}
+<header class="platform-topbar">
+  <div class="platform-topbar__copy">
+    <p class="platform-kicker">{{if .IsAdminArea}}Platform view{{else}}Engagement view{{end}}</p>
+    <h1>{{.Page.Title}}</h1>
+    <p class="platform-subtitle">{{.Page.Description}}</p>
+  </div>
+  <div class="platform-topbar__meta">
+    {{if .Engagement.ID}}
+      <div class="platform-topbar__chip">
+        <span>Members</span>
+        <strong>{{.Engagement.MemberCount}}</strong>
+      </div>
+      <div class="platform-topbar__chip">
+        <span>Sources</span>
+        <strong>{{.Engagement.SourceCount}}</strong>
+      </div>
+      <div class="platform-topbar__chip">
+        <span>Updated</span>
+        <strong>{{.Engagement.UpdatedAt}}</strong>
+      </div>
+    {{else}}
+      <div class="platform-topbar__chip">
+        <span>Role</span>
+        <strong>{{.CurrentUser.Role}}</strong>
+      </div>
+      <div class="platform-topbar__chip">
+        <span>User</span>
+        <strong>{{.CurrentUser.Username}}</strong>
+      </div>
+    {{end}}
+  </div>
+</header>
+{{end}}
+
+{{define "platform_pagination"}}
+{{if and .Key (gt .Total 20)}}
+<nav class="platform-pagination" aria-label="Table pagination">
+  <div class="platform-pagination__summary">
+    {{if gt .Total 0}}
+    <strong>{{.Start}}-{{.End}}</strong> of {{.Total}}
+    {{else}}
+    <strong>0</strong> results
+    {{end}}
+  </div>
+  <div class="platform-pagination__controls">
+    <div class="platform-pagination__sizes">
+      <span>Rows</span>
+      {{range .PageSizeHrefs}}
+      <a class="platform-pagination__size {{if .Active}}is-active{{end}}" href="{{.Href}}">{{.Label}}</a>
+      {{end}}
+    </div>
+    <div class="platform-pagination__nav">
+      {{if .HasPrev}}
+      <a class="platform-pagination__link" href="{{.PrevHref}}">Prev</a>
+      {{else}}
+      <span class="platform-pagination__link is-disabled">Prev</span>
+      {{end}}
+      <span class="platform-pagination__page">Page {{.Page}} / {{.TotalPages}}</span>
+      {{if .HasNext}}
+      <a class="platform-pagination__link" href="{{.NextHref}}">Next</a>
+      {{else}}
+      <span class="platform-pagination__link is-disabled">Next</span>
+      {{end}}
+    </div>
+  </div>
+</nav>
+{{end}}
+{{end}}
+
+{{define "platform_stats"}}
+{{if .}}
+<section class="platform-stat-strip">
+  {{range .}}
+    <article class="platform-stat-card tone-{{.Tone}}">
+      <p>{{.Label}}</p>
+      <strong>{{.Value}}</strong>
+      <span>{{.Detail}}</span>
+    </article>
+  {{end}}
+</section>
+{{end}}
+{{end}}
