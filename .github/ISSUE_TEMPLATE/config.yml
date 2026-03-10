@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contribution Workflow
+    url: https://github.com/mrbrutti/N.W.A./blob/master/docs/github-workflow.md
+    about: Read the required issue -> branch -> PR -> test -> merge workflow before filing or starting work.
