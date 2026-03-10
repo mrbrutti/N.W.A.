@@ -492,6 +492,44 @@ func TestPlatformEngagementCreationSurvivesBlockedKickoff(t *testing.T) {
 	}
 }
 
+func TestAdminGetRoutesRedirectToReactShell(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Setenv("NWA_ADMIN_PASSWORD", "adminpass")
+	app, err := newApplicationWithConfig(applicationConfig{
+		DBDSN:           filepath.Join(t.TempDir(), "service.sqlite"),
+		DataDir:         filepath.Join(t.TempDir(), "data"),
+		WorkspaceTarget: "engagement-alpha",
+	}, logger)
+	if err != nil {
+		t.Fatalf("newApplicationWithConfig() error = %v", err)
+	}
+
+	handler, err := app.routes()
+	if err != nil {
+		t.Fatalf("routes() error = %v", err)
+	}
+
+	for path, want := range map[string]string{
+		"/admin":             "/app/admin",
+		"/admin/users":       "/app/admin/users",
+		"/admin/engagements": "/app/admin/engagements",
+		"/admin/workers":     "/app/admin/workers",
+		"/admin/connectors":  "/app/admin/connectors",
+		"/admin/audit":       "/app/admin/audit",
+		"/admin/tools":       "/app/admin/tools",
+	} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusSeeOther {
+			t.Fatalf("%s status = %d, want %d", path, recorder.Code, http.StatusSeeOther)
+		}
+		if got := recorder.Header().Get("Location"); got != want {
+			t.Fatalf("%s Location = %q, want %q", path, got, want)
+		}
+	}
+}
+
 func TestScopeKickoffCreatesChunksAndApproval(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	app, err := newApplicationWithConfig(applicationConfig{
@@ -767,16 +805,18 @@ func TestAdminToolCommandTemplateCanBeUpdated(t *testing.T) {
 	}
 
 	template := "sudo {{binary}} {{args}}"
-	response, err := client.PostForm(server.URL+"/admin/tools", url.Values{
-		"action":           {"update_tool_command"},
-		"tool_id":          {"nmap-enrich"},
-		"command_template": {template},
-	})
+	requestBody := bytes.NewBufferString(`{"commandTemplate":"` + template + `"}`)
+	request, err := http.NewRequest(http.MethodPatch, server.URL+"/api/v1/admin/tools/nmap-enrich", requestBody)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := client.Do(request)
 	if err != nil {
 		t.Fatalf("update tool command error = %v", err)
 	}
-	if response.StatusCode != http.StatusSeeOther {
-		t.Fatalf("tool update status = %d, want %d", response.StatusCode, http.StatusSeeOther)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("tool update status = %d, want %d", response.StatusCode, http.StatusOK)
 	}
 
 	resolved, err := app.platform.store.toolCommandTemplate("nmap-enrich")
@@ -791,13 +831,12 @@ func TestAdminToolCommandTemplateCanBeUpdated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /admin/tools error = %v", err)
 	}
-	body, err := io.ReadAll(pageResponse.Body)
-	pageResponse.Body.Close()
-	if err != nil {
-		t.Fatalf("read /admin/tools body error = %v", err)
+	_ = pageResponse.Body.Close()
+	if pageResponse.StatusCode != http.StatusSeeOther {
+		t.Fatalf("GET /admin/tools status = %d, want %d", pageResponse.StatusCode, http.StatusSeeOther)
 	}
-	if !strings.Contains(string(body), template) {
-		t.Fatal("admin tools page did not render the updated command template")
+	if location := pageResponse.Header.Get("Location"); location != "/app/admin/tools" {
+		t.Fatalf("GET /admin/tools Location = %q, want /app/admin/tools", location)
 	}
 }
 

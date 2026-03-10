@@ -121,6 +121,48 @@ export type PlatformTool = {
   label: string;
   status: string;
   kind: string;
+  family: string;
+  installSource: string;
+  binaryName: string;
+  targetStrategy: string;
+  safetyClass: string;
+  costProfile: string;
+  description: string;
+  statusTone: string;
+  statusDetail: string;
+  capabilities: string[];
+  requiredConfig: string[];
+  commandEditable: boolean;
+  defaultCommandTemplate: string;
+  commandTemplate: string;
+  resolvedCommandTemplate: string;
+};
+
+export type PlatformWorker = {
+  id: string;
+  label: string;
+  mode: string;
+  zone: string;
+  status: string;
+  statusTone: string;
+  lastSeenAt: string;
+  detail: string;
+};
+
+export type PlatformConnector = {
+  id: string;
+  label: string;
+  status: string;
+  statusTone: string;
+  statusDetail: string;
+};
+
+export type PlatformAuditEvent = {
+  createdAt: string;
+  actorLabel: string;
+  kind: string;
+  summary: string;
+  engagementName: string;
 };
 
 export type PlatformSource = {
@@ -284,24 +326,9 @@ export type PlatformHealth = {
 export type AdminOverviewPayload = {
   health: PlatformHealth;
   engagements: ListResponse<PlatformEngagement>;
-  workers: ListResponse<{
-    id: string;
-    label: string;
-    mode: string;
-    zone: string;
-    status: string;
-    statusTone: string;
-    lastSeenAt: string;
-    detail: string;
-  }>;
+  workers: ListResponse<PlatformWorker>;
   tools: ListResponse<PlatformTool>;
-  audit: ListResponse<{
-    createdAt: string;
-    actorLabel: string;
-    kind: string;
-    summary: string;
-    engagementName: string;
-  }>;
+  audit: ListResponse<PlatformAuditEvent>;
 };
 
 export type EngagementScopePayload = {
@@ -341,13 +368,7 @@ export type EngagementSettingsPayload = {
     joinedAt: string;
   }>;
   tools: ListResponse<PlatformTool>;
-  connectors: ListResponse<{
-    id: string;
-    label: string;
-    status: string;
-    statusTone: string;
-    statusDetail: string;
-  }>;
+  connectors: ListResponse<PlatformConnector>;
 };
 
 export type StatCard = {
@@ -437,6 +458,46 @@ export function adminToolsQuery() {
     queryKey: ["admin-tools"],
     queryFn: () => requestJSON<ListResponse<PlatformTool>>("/api/v1/admin/tools"),
     staleTime: 30_000,
+  });
+}
+
+export function adminUsersQuery() {
+  return queryOptions({
+    queryKey: ["admin-users"],
+    queryFn: () => requestJSON<ListResponse<PlatformUser>>("/api/v1/admin/users"),
+    staleTime: 30_000,
+  });
+}
+
+export function adminEngagementsQuery() {
+  return queryOptions({
+    queryKey: ["admin-engagements"],
+    queryFn: () => requestJSON<ListResponse<PlatformEngagement>>("/api/v1/admin/engagements"),
+    staleTime: 30_000,
+  });
+}
+
+export function adminWorkersQuery() {
+  return queryOptions({
+    queryKey: ["admin-workers"],
+    queryFn: () => requestJSON<ListResponse<PlatformWorker>>("/api/v1/admin/workers"),
+    staleTime: 15_000,
+  });
+}
+
+export function adminConnectorsQuery() {
+  return queryOptions({
+    queryKey: ["admin-connectors"],
+    queryFn: () => requestJSON<ListResponse<PlatformConnector>>("/api/v1/admin/connectors"),
+    staleTime: 15_000,
+  });
+}
+
+export function adminAuditQuery() {
+  return queryOptions({
+    queryKey: ["admin-audit"],
+    queryFn: () => requestJSON<ListResponse<PlatformAuditEvent>>("/api/v1/admin/audit"),
+    staleTime: 15_000,
   });
 }
 
@@ -551,5 +612,15 @@ export async function login(loginValue: string, password: string) {
 export async function logout() {
   return requestJSON<SessionPayload>("/api/v1/session/logout", {
     method: "POST",
+  });
+}
+
+export async function updateToolCommandTemplate(
+  toolID: string,
+  payload: { commandTemplate?: string; reset?: boolean },
+) {
+  return requestJSON<PlatformTool>(`/api/v1/admin/tools/${toolID}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
