@@ -1,6 +1,6 @@
 # GitHub Workflow
 
-This repository uses an issue-driven workflow. Every implementation change must start from a GitHub issue and land through a pull request with local validation and CI.
+This repository uses an issue-driven workflow. Every implementation change must start from a GitHub issue and land through a pull request with local validation.
 
 ## Rules
 
@@ -9,13 +9,12 @@ This repository uses an issue-driven workflow. Every implementation change must 
 3. Keep each branch and PR scoped to one issue, or one tightly related slice of an Epic.
 4. Run the required validation locally before opening or updating the PR.
 5. Open a PR immediately after the first push and link the issue with a closing keyword such as `Closes #123`.
-6. Merge only after the PR is reviewed or otherwise accepted and CI is green.
+6. Merge only after the PR is reviewed or otherwise accepted and the required local validation has been run for the final branch state.
 7. Let the merge close the issue automatically. Do not close implementation issues by hand unless no code change is required.
 
 ## Required Validation
 
-- `go test ./...`
-- `node --check web/js/app.js`
+- `./scripts/validate-local.sh`
 
 Add extra validation when the change touches a narrower subsystem, for example a focused smoke test, curl verification, or browser check.
 
@@ -42,6 +41,6 @@ Preferred merge mode:
 
 Before merging:
 
-- CI is green
+- local validation has been run against the current branch tip
 - the linked issue is present in the PR body
 - the PR scope still matches the issue

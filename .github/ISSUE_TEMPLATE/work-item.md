@@ -15,8 +15,7 @@ assignees: []
 - 
 
 ## Validation
-- [ ] `go test ./...`
-- [ ] `node --check web/js/app.js`
+- [ ] `./scripts/validate-local.sh`
 - [ ] Additional targeted validation if needed
 
 ## Done When
