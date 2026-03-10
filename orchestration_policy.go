@@ -42,27 +42,27 @@ type orchestrationStepRecord struct {
 }
 
 type OrchestrationPolicyView struct {
-	ID          string
-	Name        string
-	Description string
-	Active      bool
-	CreatedAt   string
-	UpdatedAt   string
-	Steps       []OrchestrationStepView
+	ID          string                  `json:"id"`
+	Name        string                  `json:"name"`
+	Description string                  `json:"description"`
+	Active      bool                    `json:"active"`
+	CreatedAt   string                  `json:"createdAt"`
+	UpdatedAt   string                  `json:"updatedAt"`
+	Steps       []OrchestrationStepView `json:"steps"`
 }
 
 type OrchestrationStepView struct {
-	ID           string
-	Label        string
-	Trigger      string
-	PluginID     string
-	Stage        string
-	TargetSource string
-	MatchKinds   []string
-	WhenPlugin   string
-	WhenProfile  string
-	Summary      string
-	Enabled      bool
+	ID           string   `json:"id"`
+	Label        string   `json:"label"`
+	Trigger      string   `json:"trigger"`
+	PluginID     string   `json:"pluginId"`
+	Stage        string   `json:"stage"`
+	TargetSource string   `json:"targetSource"`
+	MatchKinds   []string `json:"matchKinds"`
+	WhenPlugin   string   `json:"whenPlugin"`
+	WhenProfile  string   `json:"whenProfile"`
+	Summary      string   `json:"summary"`
+	Enabled      bool     `json:"enabled"`
 }
 
 func defaultOrchestrationPolicies() []orchestrationPolicyRecord {

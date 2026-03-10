@@ -138,12 +138,12 @@ type StatCard struct {
 }
 
 type Bucket struct {
-	Label string
-	Count int
-	Scope string
-	Query string
-	Href  string
-	Share string
+	Label string `json:"label"`
+	Count int    `json:"count"`
+	Scope string `json:"scope"`
+	Query string `json:"query"`
+	Href  string `json:"href"`
+	Share string `json:"share"`
 }
 
 type FindingSummary struct {
@@ -400,56 +400,56 @@ type PluginDefinitionView struct {
 }
 
 type ToolReadinessGroup struct {
-	Label  string
-	Detail string
-	Ready  int
-	Total  int
-	Tone   string
-	Tools  []PluginDefinitionView
+	Label  string                 `json:"label"`
+	Detail string                 `json:"detail"`
+	Ready  int                    `json:"ready"`
+	Total  int                    `json:"total"`
+	Tone   string                 `json:"tone"`
+	Tools  []PluginDefinitionView `json:"tools"`
 }
 
 type JobArtifactView struct {
-	Label string
-	Href  string
+	Label string `json:"label"`
+	Href  string `json:"href"`
 }
 
 type PluginJobView struct {
-	ID            string
-	PluginID      string
-	PluginLabel   string
-	PluginKind    string
-	SafetyClass   string
-	CostProfile   string
-	Capabilities  []string
-	Status        string
-	StatusTone    string
-	TargetSummary string
-	TargetCount   int
-	CampaignID    string
-	ChunkID       string
-	Stage         string
-	WorkerMode    string
-	WorkerZone    string
-	CreatedAt     string
-	StartedAt     string
-	FinishedAt    string
-	Summary       string
-	Error         string
-	Artifacts     []JobArtifactView
-	Findings      FindingSummary
+	ID            string            `json:"id"`
+	PluginID      string            `json:"pluginId"`
+	PluginLabel   string            `json:"pluginLabel"`
+	PluginKind    string            `json:"pluginKind"`
+	SafetyClass   string            `json:"safetyClass"`
+	CostProfile   string            `json:"costProfile"`
+	Capabilities  []string          `json:"capabilities"`
+	Status        string            `json:"status"`
+	StatusTone    string            `json:"statusTone"`
+	TargetSummary string            `json:"targetSummary"`
+	TargetCount   int               `json:"targetCount"`
+	CampaignID    string            `json:"campaignId"`
+	ChunkID       string            `json:"chunkId"`
+	Stage         string            `json:"stage"`
+	WorkerMode    string            `json:"workerMode"`
+	WorkerZone    string            `json:"workerZone"`
+	CreatedAt     string            `json:"createdAt"`
+	StartedAt     string            `json:"startedAt"`
+	FinishedAt    string            `json:"finishedAt"`
+	Summary       string            `json:"summary"`
+	Error         string            `json:"error"`
+	Artifacts     []JobArtifactView `json:"artifacts"`
+	Findings      FindingSummary    `json:"findings"`
 }
 
 type RunProfileView struct {
-	Label        string
-	PluginID     string
-	ProfileScope string
-	Detail       string
-	Count        int
-	CountLabel   string
-	ModeLabel    string
-	Severity     string
-	Profile      string
-	CrawlDepth   string
+	Label        string `json:"label"`
+	PluginID     string `json:"pluginId"`
+	ProfileScope string `json:"profileScope"`
+	Detail       string `json:"detail"`
+	Count        int    `json:"count"`
+	CountLabel   string `json:"countLabel"`
+	ModeLabel    string `json:"modeLabel"`
+	Severity     string `json:"severity"`
+	Profile      string `json:"profile"`
+	CrawlDepth   string `json:"crawlDepth"`
 }
 
 type IntegrationActionView struct {
@@ -514,73 +514,73 @@ type CampaignView struct {
 }
 
 type ScopeSeedView struct {
-	ID        string
-	Kind      string
-	Value     string
-	Source    string
-	Status    string
-	Detail    string
-	CreatedAt string
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Value     string `json:"value"`
+	Source    string `json:"source"`
+	Status    string `json:"status"`
+	Detail    string `json:"detail"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type ScopeTargetView struct {
-	ID         string
-	Kind       string
-	Value      string
-	Normalized string
-	Status     string
-	SeedID     string
-	CreatedAt  string
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Value      string `json:"value"`
+	Normalized string `json:"normalized"`
+	Status     string `json:"status"`
+	SeedID     string `json:"seedId"`
+	CreatedAt  string `json:"createdAt"`
 }
 
 type TargetChunkView struct {
-	ID           string
-	CampaignID   string
-	Name         string
-	Stage        string
-	Kind         string
-	Status       string
-	StatusTone   string
-	Detail       string
-	Size         int
-	CreatedAt    string
-	StartedAt    string
-	FinishedAt   string
-	Values       []string
-	RunIDs       []string
-	ToolIDs      []string
-	SkippedTools []string
+	ID           string   `json:"id"`
+	CampaignID   string   `json:"campaignId"`
+	Name         string   `json:"name"`
+	Stage        string   `json:"stage"`
+	Kind         string   `json:"kind"`
+	Status       string   `json:"status"`
+	StatusTone   string   `json:"statusTone"`
+	Detail       string   `json:"detail"`
+	Size         int      `json:"size"`
+	CreatedAt    string   `json:"createdAt"`
+	StartedAt    string   `json:"startedAt"`
+	FinishedAt   string   `json:"finishedAt"`
+	Values       []string `json:"values"`
+	RunIDs       []string `json:"runIds"`
+	ToolIDs      []string `json:"toolIds"`
+	SkippedTools []string `json:"skippedTools"`
 }
 
 type ApprovalView struct {
-	ID             string
-	CampaignID     string
-	Scope          string
-	Status         string
-	StatusTone     string
-	Summary        string
-	Detail         string
-	RequiredClass  string
-	AllowedToolIDs []string
-	CreatedAt      string
-	DecidedAt      string
+	ID             string   `json:"id"`
+	CampaignID     string   `json:"campaignId"`
+	Scope          string   `json:"scope"`
+	Status         string   `json:"status"`
+	StatusTone     string   `json:"statusTone"`
+	Summary        string   `json:"summary"`
+	Detail         string   `json:"detail"`
+	RequiredClass  string   `json:"requiredClass"`
+	AllowedToolIDs []string `json:"allowedToolIds"`
+	CreatedAt      string   `json:"createdAt"`
+	DecidedAt      string   `json:"decidedAt"`
 }
 
 type RecommendationQueueView struct {
-	ID               string
-	CampaignID       string
-	Type             string
-	Status           string
-	StatusTone       string
-	Title            string
-	Detail           string
-	Rationale        string
-	ExpectedValue    string
-	RequiredApproval string
-	Confidence       string
-	ToolIDs          []string
-	CreatedAt        string
-	UpdatedAt        string
+	ID               string   `json:"id"`
+	CampaignID       string   `json:"campaignId"`
+	Type             string   `json:"type"`
+	Status           string   `json:"status"`
+	StatusTone       string   `json:"statusTone"`
+	Title            string   `json:"title"`
+	Detail           string   `json:"detail"`
+	Rationale        string   `json:"rationale"`
+	ExpectedValue    string   `json:"expectedValue"`
+	RequiredApproval string   `json:"requiredApproval"`
+	Confidence       string   `json:"confidence"`
+	ToolIDs          []string `json:"toolIds"`
+	CreatedAt        string   `json:"createdAt"`
+	UpdatedAt        string   `json:"updatedAt"`
 }
 
 type ObservationView struct {

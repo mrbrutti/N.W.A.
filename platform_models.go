@@ -21,24 +21,29 @@ type PlatformNavGroup struct {
 }
 
 type PlatformPaginationLink struct {
-	Label  string
-	Href   string
-	Active bool
+	Label  string `json:"label"`
+	Href   string `json:"href"`
+	Active bool   `json:"active"`
 }
 
 type PlatformPaginationView struct {
-	Key           string
-	Page          int
-	PageSize      int
-	Total         int
-	TotalPages    int
-	Start         int
-	End           int
-	HasPrev       bool
-	HasNext       bool
-	PrevHref      string
-	NextHref      string
-	PageSizeHrefs []PlatformPaginationLink
+	Key           string                   `json:"key"`
+	Page          int                      `json:"page"`
+	PageSize      int                      `json:"pageSize"`
+	Total         int                      `json:"total"`
+	TotalPages    int                      `json:"totalPages"`
+	Start         int                      `json:"start"`
+	End           int                      `json:"end"`
+	HasPrev       bool                     `json:"hasPrev"`
+	HasNext       bool                     `json:"hasNext"`
+	PrevHref      string                   `json:"prevHref"`
+	NextHref      string                   `json:"nextHref"`
+	PageSizeHrefs []PlatformPaginationLink `json:"pageSizeHrefs"`
+}
+
+type PlatformListResponse[T any] struct {
+	Items      []T                    `json:"items"`
+	Pagination PlatformPaginationView `json:"pagination"`
 }
 
 type PlatformUserView struct {
@@ -230,6 +235,54 @@ type PlatformHealthView struct {
 	ConfiguredConnectors int `json:"configuredConnectors"`
 	RunningRuns          int `json:"runningRuns"`
 	QueuedRuns           int `json:"queuedRuns"`
+}
+
+type PlatformAdminOverviewAPI struct {
+	Health      PlatformHealthView                           `json:"health"`
+	Engagements PlatformListResponse[PlatformEngagementView] `json:"engagements"`
+	Workers     PlatformListResponse[PlatformWorkerView]     `json:"workers"`
+	Tools       PlatformListResponse[PlatformToolView]       `json:"tools"`
+	Audit       PlatformListResponse[PlatformAuditEventView] `json:"audit"`
+}
+
+type PlatformScopeAPI struct {
+	Stats     []StatCard                            `json:"stats"`
+	Seeds     PlatformListResponse[ScopeSeedView]   `json:"seeds"`
+	Targets   PlatformListResponse[ScopeTargetView] `json:"targets"`
+	Chunks    PlatformListResponse[TargetChunkView] `json:"chunks"`
+	Approvals PlatformListResponse[ApprovalView]    `json:"approvals"`
+	Runs      PlatformListResponse[PlatformRunView] `json:"runs"`
+}
+
+type PlatformCampaignsAPI struct {
+	Stats       []StatCard                             `json:"stats"`
+	StatusMix   []Bucket                               `json:"statusMix"`
+	StageMix    []Bucket                               `json:"stageMix"`
+	Runs        PlatformListResponse[PlatformRunView]  `json:"runs"`
+	Chunks      PlatformListResponse[TargetChunkView]  `json:"chunks"`
+	Tools       PlatformListResponse[PlatformToolView] `json:"tools"`
+	RunProfiles []RunProfileView                       `json:"runProfiles"`
+	Readiness   []ToolReadinessGroup                   `json:"readiness"`
+	Policies    []OrchestrationPolicyView              `json:"policies"`
+}
+
+type PlatformRecommendationsAPI struct {
+	Recommendations PlatformListResponse[RecommendationQueueView] `json:"recommendations"`
+	Approvals       PlatformListResponse[ApprovalView]            `json:"approvals"`
+	Runs            PlatformListResponse[PlatformRunView]         `json:"runs"`
+}
+
+type PlatformSettingsAPI struct {
+	Memberships PlatformListResponse[PlatformMembershipView] `json:"memberships"`
+	Tools       PlatformListResponse[PlatformToolView]       `json:"tools"`
+	Connectors  PlatformListResponse[PlatformConnectorView]  `json:"connectors"`
+}
+
+type PlatformEngagementEvent struct {
+	Type       string                 `json:"type"`
+	Timestamp  string                 `json:"timestamp"`
+	Engagement PlatformEngagementView `json:"engagement"`
+	Stats      []StatCard             `json:"stats"`
 }
 
 type PlatformBasePage struct {
