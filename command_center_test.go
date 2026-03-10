@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -210,11 +211,11 @@ func TestPlatformSessionJSONFlow(t *testing.T) {
 	if engagementResponse.StatusCode != http.StatusOK {
 		t.Fatalf("GET engagements status = %d, want %d", engagementResponse.StatusCode, http.StatusOK)
 	}
-	var engagements []PlatformEngagementView
+	var engagements PlatformListResponse[PlatformEngagementView]
 	if err := json.NewDecoder(engagementResponse.Body).Decode(&engagements); err != nil {
 		t.Fatalf("decode engagements error = %v", err)
 	}
-	if len(engagements) == 0 {
+	if len(engagements.Items) == 0 {
 		t.Fatal("expected at least one engagement view after bootstrap")
 	}
 }
@@ -281,17 +282,45 @@ func TestPlatformEngagementJSONResources(t *testing.T) {
 	}
 
 	for _, path := range []string{
+		"/api/v1/admin/overview",
+		"/api/v1/admin/users",
+		"/api/v1/admin/engagements",
+		"/api/v1/admin/workers",
+		"/api/v1/admin/connectors",
+		"/api/v1/admin/audit",
+		"/api/v1/admin/tools",
+		"/api/v1/engagements/acme-internal",
 		"/api/v1/engagements/acme-internal/summary",
+		"/api/v1/engagements/acme-internal/scope",
 		"/api/v1/engagements/acme-internal/zones",
 		"/api/v1/engagements/acme-internal/sources",
 		"/api/v1/engagements/acme-internal/runs",
+		"/api/v1/engagements/acme-internal/campaigns",
 		"/api/v1/engagements/acme-internal/hosts",
 		"/api/v1/engagements/acme-internal/ports",
 		"/api/v1/engagements/acme-internal/findings",
 		"/api/v1/engagements/acme-internal/topology",
 		"/api/v1/engagements/acme-internal/recommendations",
+		"/api/v1/engagements/acme-internal/settings",
 	} {
 		_ = checkJSON(path)
+	}
+
+	eventResponse, err := client.Get(server.URL + "/api/v1/engagements/acme-internal/events")
+	if err != nil {
+		t.Fatalf("GET events error = %v", err)
+	}
+	defer eventResponse.Body.Close()
+	if contentType := eventResponse.Header.Get("Content-Type"); !strings.Contains(contentType, "text/event-stream") {
+		t.Fatalf("events content type = %q, want text/event-stream", contentType)
+	}
+	reader := bufio.NewReader(eventResponse.Body)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read event line error = %v", err)
+	}
+	if got := strings.TrimSpace(line); got != "event: engagement.snapshot" {
+		t.Fatalf("event line = %q, want engagement.snapshot", got)
 	}
 }
 

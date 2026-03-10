@@ -121,7 +121,7 @@ func (app *application) handleEngagementsJSON(writer http.ResponseWriter, reques
 		http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(writer, http.StatusOK, items)
+	writeJSON(writer, http.StatusOK, paginateAPIItems(request, items))
 }
 
 func (app *application) sessionPayload(user platformUserRecord, engagements []PlatformEngagementView) platformSessionPayload {

@@ -27,8 +27,7 @@ import {
 } from "react";
 
 import {
-  adminHealthQuery,
-  adminToolsQuery,
+  adminOverviewQuery,
   engagementFindingsQuery,
   engagementHostsQuery,
   engagementSummaryQuery,
@@ -293,9 +292,7 @@ function LoginPage() {
 }
 
 function AdminPage() {
-  const health = useSuspenseQuery(adminHealthQuery());
-  const engagements = useSuspenseQuery(engagementsQuery());
-  const tools = useSuspenseQuery(adminToolsQuery());
+  const overview = useSuspenseQuery(adminOverviewQuery());
 
   return (
     <div className="cc-page">
@@ -306,17 +303,17 @@ function AdminPage() {
       />
       <StatGrid
         items={[
-          { label: "Users", value: health.data.userCount.toString(), detail: "Platform accounts" },
-          { label: "Engagements", value: health.data.engagementCount.toString(), detail: "Tracked missions" },
-          { label: "Workers", value: `${health.data.liveWorkers}/${health.data.workerCount}`, detail: "Live execution workers" },
-          { label: "Queue", value: `${health.data.runningRuns} / ${health.data.queuedRuns}`, detail: "Running / queued" },
+          { label: "Users", value: overview.data.health.userCount.toString(), detail: "Platform accounts" },
+          { label: "Engagements", value: overview.data.health.engagementCount.toString(), detail: "Tracked missions" },
+          { label: "Workers", value: `${overview.data.health.liveWorkers}/${overview.data.health.workerCount}`, detail: "Live execution workers" },
+          { label: "Queue", value: `${overview.data.health.runningRuns} / ${overview.data.health.queuedRuns}`, detail: "Running / queued" },
         ]}
       />
       <div className="cc-grid cc-grid--two">
-        <Panel title="Engagement registry" meta={`${engagements.data.length} engagements`}>
+        <Panel title="Engagement registry" meta={`${overview.data.engagements.pagination.total} engagements`}>
           <Table
             columns={["Name", "Scope", "Hosts", "Findings"]}
-            rows={engagements.data.map((item) => [
+            rows={overview.data.engagements.items.map((item) => [
               <a key={item.id} href={`/app/engagements/${item.slug}`}>
                 {item.name}
               </a>,
@@ -327,10 +324,10 @@ function AdminPage() {
             empty="No engagements available."
           />
         </Panel>
-        <Panel title="Tool posture" meta={`${tools.data.tools.length} tools`}>
+        <Panel title="Tool posture" meta={`${overview.data.tools.pagination.total} tools`}>
           <Table
             columns={["Tool", "Kind", "Status"]}
-            rows={tools.data.tools.map((item) => [item.label, item.kind, item.status])}
+            rows={overview.data.tools.items.map((item) => [item.label, item.kind, item.status])}
             empty="No tools registered."
           />
         </Panel>
@@ -349,12 +346,12 @@ function EngagementsPage() {
         title="Registry"
         subtitle="Shared mission index for operators and analysts."
       />
-      <Panel title="Available engagements" meta={`${engagements.data.length} total`}>
+      <Panel title="Available engagements" meta={`${engagements.data.pagination.total} total`}>
         <div className="cc-stack">
-          {engagements.data.length === 0 ? (
+          {engagements.data.items.length === 0 ? (
             <InlineState tone="muted" title="No engagements" body="Create an engagement from the admin surface." />
           ) : (
-            engagements.data.map((item) => (
+            engagements.data.items.map((item) => (
               <a className="cc-list-row" href={`/app/engagements/${item.slug}`} key={item.id}>
                 <div>
                   <strong>{item.name}</strong>
@@ -375,7 +372,7 @@ function EngagementsPage() {
 function EngagementLayout() {
   const { slug } = engagementRoute.useParams();
   const engagements = useSuspenseQuery(engagementsQuery());
-  const engagement = engagements.data.find((item) => item.slug === slug);
+  const engagement = engagements.data.items.find((item) => item.slug === slug);
 
   if (!engagement) {
     return <FullState tone="danger" title="Unknown engagement" body="This engagement is not visible in the current session." />;
@@ -417,7 +414,7 @@ function EngagementOverviewPage() {
       <div className="cc-grid cc-grid--two">
         <Panel title="Priority hosts" meta="Top of current slice">
           <List
-            items={hosts.data.slice(0, 8).map((host) => ({
+            items={hosts.data.items.slice(0, 8).map((host) => ({
               key: host.ip,
               label: host.displayName,
               detail: `${host.ip} · ${host.openPorts} ports · ${host.findings} findings`,
@@ -428,7 +425,7 @@ function EngagementOverviewPage() {
         </Panel>
         <Panel title="Finding groups" meta="Highest-signal definitions">
           <List
-            items={findings.data.slice(0, 8).map((finding) => ({
+            items={findings.data.items.slice(0, 8).map((finding) => ({
               key: finding.id,
               label: finding.name,
               detail: `${finding.severity} · ${finding.occurrences} occurrences`,
@@ -478,8 +475,8 @@ function EngagementHostsPage() {
   );
 
   const selectedZone = useMemo(
-    () => zones.data.find((zone) => zone.id === search.zone),
-    [search.zone, zones.data],
+    () => zones.data.items.find((zone) => zone.id === search.zone),
+    [search.zone, zones.data.items],
   );
 
   return (
@@ -513,7 +510,7 @@ function EngagementHostsPage() {
             }}
           >
             <option value="">All zones</option>
-            {zones.data.map((zone) => (
+            {zones.data.items.map((zone) => (
               <option key={zone.id} value={zone.id}>
                 {zone.name}
               </option>
@@ -525,10 +522,10 @@ function EngagementHostsPage() {
       <div className="cc-grid cc-grid--sidebar">
         <Panel
           title="Zone navigator"
-          meta={selectedZone ? `${selectedZone.name} selected` : `${zones.data.length} zones`}
+          meta={selectedZone ? `${selectedZone.name} selected` : `${zones.data.pagination.total} zones`}
         >
           <List
-            items={zones.data.map((zone) => ({
+            items={zones.data.items.map((zone) => ({
               key: zone.id,
               label: zone.name,
               detail: `${zone.kind} · ${zone.hostCount} hosts`,
@@ -551,10 +548,10 @@ function EngagementHostsPage() {
           />
         </Panel>
 
-        <Panel title="Host inventory" meta={`${hosts.data.length} hosts`}>
+        <Panel title="Host inventory" meta={`${hosts.data.pagination.total} hosts`}>
           <Table
             columns={["Host", "OS", "Ports", "Findings", "Exposure"]}
-            rows={hosts.data.map((host) => [
+            rows={hosts.data.items.map((host) => [
               <div key={host.ip}>
                 <strong>{host.displayName}</strong>
                 <small>{host.ip}</small>
