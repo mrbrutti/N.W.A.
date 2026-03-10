@@ -39,3 +39,11 @@ func (app *application) handleAdminReactRedirect(writer http.ResponseWriter, req
 	}
 	http.Redirect(writer, request, target, http.StatusSeeOther)
 }
+
+func (app *application) handleEngagementReactRedirect(writer http.ResponseWriter, request *http.Request) {
+	target := "/app" + request.URL.Path
+	if request.URL.RawQuery != "" {
+		target += "?" + request.URL.RawQuery
+	}
+	http.Redirect(writer, request, target, http.StatusSeeOther)
+}

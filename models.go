@@ -147,12 +147,12 @@ type Bucket struct {
 }
 
 type FindingSummary struct {
-	Total    int
-	Critical int
-	High     int
-	Medium   int
-	Low      int
-	Info     int
+	Total    int `json:"total"`
+	Critical int `json:"critical"`
+	High     int `json:"high"`
+	Medium   int `json:"medium"`
+	Low      int `json:"low"`
+	Info     int `json:"info"`
 }
 
 type FindingTemplateSummary struct {
@@ -164,169 +164,169 @@ type FindingTemplateSummary struct {
 }
 
 type CoverageView struct {
-	Level           string
-	Label           string
-	Detail          string
-	HasScripts      bool
-	HasOS           bool
-	HasTrace        bool
-	NeedsEnrichment bool
+	Level           string `json:"level"`
+	Label           string `json:"label"`
+	Detail          string `json:"detail"`
+	HasScripts      bool   `json:"hasScripts"`
+	HasOS           bool   `json:"hasOS"`
+	HasTrace        bool   `json:"hasTrace"`
+	NeedsEnrichment bool   `json:"needsEnrichment"`
 }
 
 type Exposure struct {
-	Label         string
-	Tone          string
-	Detail        string
-	Score         int
-	CriticalPorts []string
+	Label         string   `json:"label"`
+	Tone          string   `json:"tone"`
+	Detail        string   `json:"detail"`
+	Score         int      `json:"score"`
+	CriticalPorts []string `json:"criticalPorts"`
 }
 
 type PortChip struct {
-	Port    string
-	Service string
+	Port    string `json:"port"`
+	Service string `json:"service"`
 }
 
 type HostSummary struct {
-	IP               string
-	DisplayName      string
-	Hostnames        []string
-	OS               string
-	SourceCount      int
-	OpenPortCount    int
-	ServiceCount     int
-	ScriptCount      int
-	Ports            []PortChip
-	HiddenPortCount  int
-	Exposure         Exposure
-	CriticalServices []string
-	Findings         FindingSummary
-	Coverage         CoverageView
-	HTTPTargets      int
+	IP               string         `json:"ip"`
+	DisplayName      string         `json:"displayName"`
+	Hostnames        []string       `json:"hostnames"`
+	OS               string         `json:"os"`
+	SourceCount      int            `json:"sourceCount"`
+	OpenPortCount    int            `json:"openPortCount"`
+	ServiceCount     int            `json:"serviceCount"`
+	ScriptCount      int            `json:"scriptCount"`
+	Ports            []PortChip     `json:"ports"`
+	HiddenPortCount  int            `json:"hiddenPortCount"`
+	Exposure         Exposure       `json:"exposure"`
+	CriticalServices []string       `json:"criticalServices"`
+	Findings         FindingSummary `json:"findings"`
+	Coverage         CoverageView   `json:"coverage"`
+	HTTPTargets      int            `json:"httpTargets"`
 }
 
 type PortRow struct {
-	Port        string
-	Protocol    string
-	State       string
-	Service     string
-	Product     string
-	Version     string
-	ExtraInfo   string
-	OSType      string
-	Method      string
-	Confidence  string
-	Fingerprint string
-	CPEs        []string
-	Scripts     []ScriptOutput
+	Port        string         `json:"port"`
+	Protocol    string         `json:"protocol"`
+	State       string         `json:"state"`
+	Service     string         `json:"service"`
+	Product     string         `json:"product"`
+	Version     string         `json:"version"`
+	ExtraInfo   string         `json:"extraInfo"`
+	OSType      string         `json:"osType"`
+	Method      string         `json:"method"`
+	Confidence  string         `json:"confidence"`
+	Fingerprint string         `json:"fingerprint"`
+	CPEs        []string       `json:"cpes"`
+	Scripts     []ScriptOutput `json:"scripts"`
 }
 
 type ScriptOutput struct {
-	ID     string
-	Output string
+	ID     string `json:"id"`
+	Output string `json:"output"`
 }
 
 type ScriptGroup struct {
-	Port    string
-	Service string
-	Scripts []ScriptOutput
+	Port    string         `json:"port"`
+	Service string         `json:"service"`
+	Scripts []ScriptOutput `json:"scripts"`
 }
 
 type FingerprintSection struct {
-	Port        string
-	Service     string
-	Fingerprint string
+	Port        string `json:"port"`
+	Service     string `json:"service"`
+	Fingerprint string `json:"fingerprint"`
 }
 
 type OSMatchView struct {
-	Name     string
-	Accuracy string
-	Line     string
-	Type     string
-	Vendor   string
-	Family   string
-	Gen      string
-	CPEs     []string
+	Name     string   `json:"name"`
+	Accuracy string   `json:"accuracy"`
+	Line     string   `json:"line"`
+	Type     string   `json:"type"`
+	Vendor   string   `json:"vendor"`
+	Family   string   `json:"family"`
+	Gen      string   `json:"gen"`
+	CPEs     []string `json:"cpes"`
 }
 
 type PortUseView struct {
-	Port     string
-	Protocol string
-	State    string
+	Port     string `json:"port"`
+	Protocol string `json:"protocol"`
+	State    string `json:"state"`
 }
 
 type TraceHopView struct {
-	TTL       string
-	Address   string
-	Host      string
-	RTT       string
-	WeightPct int
+	TTL       string `json:"ttl"`
+	Address   string `json:"address"`
+	Host      string `json:"host"`
+	RTT       string `json:"rtt"`
+	WeightPct int    `json:"weightPct"`
 }
 
 type TimingView struct {
-	SRTT    string
-	RTTVar  string
-	Timeout string
+	SRTT    string `json:"srtt"`
+	RTTVar  string `json:"rttVar"`
+	Timeout string `json:"timeout"`
 }
 
 type NucleiFindingView struct {
-	TemplateID   string
-	Name         string
-	Source       string
-	Severity     string
-	SeverityTone string
-	Target       string
-	MatchedAt    string
-	Type         string
-	Description  string
-	Tags         []string
+	TemplateID   string   `json:"templateId"`
+	Name         string   `json:"name"`
+	Source       string   `json:"source"`
+	Severity     string   `json:"severity"`
+	SeverityTone string   `json:"severityTone"`
+	Target       string   `json:"target"`
+	MatchedAt    string   `json:"matchedAt"`
+	Type         string   `json:"type"`
+	Description  string   `json:"description"`
+	Tags         []string `json:"tags"`
 }
 
 type RecommendationView struct {
-	Title    string
-	Detail   string
-	Evidence string
-	Tone     string
+	Title    string `json:"title"`
+	Detail   string `json:"detail"`
+	Evidence string `json:"evidence"`
+	Tone     string `json:"tone"`
 }
 
 type VulnerabilityMatchView struct {
-	ID             string
-	Title          string
-	Severity       string
-	SeverityTone   string
-	Detail         string
-	Evidence       string
-	Recommendation string
-	ReferenceURL   string
+	ID             string `json:"id"`
+	Title          string `json:"title"`
+	Severity       string `json:"severity"`
+	SeverityTone   string `json:"severityTone"`
+	Detail         string `json:"detail"`
+	Evidence       string `json:"evidence"`
+	Recommendation string `json:"recommendation"`
+	ReferenceURL   string `json:"referenceUrl"`
 }
 
 type AnalystNoteView struct {
-	ID        string
-	Text      string
-	CreatedAt string
+	ID        string `json:"id"`
+	Text      string `json:"text"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type HostDetail struct {
-	HostSummary
-	Status          string
-	Reason          string
-	Distance        string
-	ClosedPortCount int
-	Ports           []PortRow
-	ScriptGroups    []ScriptGroup
-	Fingerprints    []FingerprintSection
-	PortsUsed       []PortUseView
-	OSFingerprint   string
-	OSMatches       []OSMatchView
-	Trace           []TraceHopView
-	Timing          TimingView
-	SourceScans     []string
-	NucleiTargets   []string
-	NucleiFindings  []NucleiFindingView
-	Recommendations []RecommendationView
-	Vulnerabilities []VulnerabilityMatchView
-	Tags            []string
-	Notes           []AnalystNoteView
-	Observations    []ObservationView
+	HostSummary     `json:"summary"`
+	Status          string                   `json:"status"`
+	Reason          string                   `json:"reason"`
+	Distance        string                   `json:"distance"`
+	ClosedPortCount int                      `json:"closedPortCount"`
+	Ports           []PortRow                `json:"ports"`
+	ScriptGroups    []ScriptGroup            `json:"scriptGroups"`
+	Fingerprints    []FingerprintSection     `json:"fingerprints"`
+	PortsUsed       []PortUseView            `json:"portsUsed"`
+	OSFingerprint   string                   `json:"osFingerprint"`
+	OSMatches       []OSMatchView            `json:"osMatches"`
+	Trace           []TraceHopView           `json:"trace"`
+	Timing          TimingView               `json:"timing"`
+	SourceScans     []string                 `json:"sourceScans"`
+	NucleiTargets   []string                 `json:"nucleiTargets"`
+	NucleiFindings  []NucleiFindingView      `json:"nucleiFindings"`
+	Recommendations []RecommendationView     `json:"recommendations"`
+	Vulnerabilities []VulnerabilityMatchView `json:"vulnerabilities"`
+	Tags            []string                 `json:"tags"`
+	Notes           []AnalystNoteView        `json:"notes"`
+	Observations    []ObservationView        `json:"observations"`
 }
 
 type HostFilter struct {
@@ -365,17 +365,17 @@ type ExportLink struct {
 }
 
 type ScanCatalogItem struct {
-	ID         string
-	Name       string
-	Kind       string
-	Source     string
-	Scanner    string
-	Version    string
-	StartedAt  string
-	ImportedAt string
-	Command    string
-	LiveHosts  int
-	Download   string
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	Source     string `json:"source"`
+	Scanner    string `json:"scanner"`
+	Version    string `json:"version"`
+	StartedAt  string `json:"startedAt"`
+	ImportedAt string `json:"importedAt"`
+	Command    string `json:"command"`
+	LiveHosts  int    `json:"liveHosts"`
+	Download   string `json:"download"`
 }
 
 type PluginDefinitionView struct {
@@ -784,28 +784,28 @@ type PortIndexPageData struct {
 }
 
 type PortHostView struct {
-	IP          string
-	DisplayName string
-	OS          string
-	Service     string
-	Product     string
-	Version     string
-	Findings    int
-	Scans       []string
-	Href        string
+	IP          string   `json:"ip"`
+	DisplayName string   `json:"displayName"`
+	OS          string   `json:"os"`
+	Service     string   `json:"service"`
+	Product     string   `json:"product"`
+	Version     string   `json:"version"`
+	Findings    int      `json:"findings"`
+	Scans       []string `json:"scans"`
+	Href        string   `json:"href"`
 }
 
 type PortDetailView struct {
-	Protocol        string
-	Port            string
-	Label           string
-	Service         string
-	HostCount       int
-	FindingTotals   FindingSummary
-	Hosts           []PortHostView
-	RelatedScans    []ScanCatalogItem
-	RelatedFindings []FindingGroupView
-	HostTargets     []string
+	Protocol        string             `json:"protocol"`
+	Port            string             `json:"port"`
+	Label           string             `json:"label"`
+	Service         string             `json:"service"`
+	HostCount       int                `json:"hostCount"`
+	FindingTotals   FindingSummary     `json:"findingTotals"`
+	Hosts           []PortHostView     `json:"hosts"`
+	RelatedScans    []ScanCatalogItem  `json:"relatedScans"`
+	RelatedFindings []FindingGroupView `json:"relatedFindings"`
+	HostTargets     []string           `json:"hostTargets"`
 }
 
 type PortPageData struct {
@@ -815,38 +815,38 @@ type PortPageData struct {
 }
 
 type FindingGroupView struct {
-	ID           string
-	TemplateID   string
-	Name         string
-	Source       string
-	Severity     string
-	SeverityTone string
-	Occurrences  int
-	Hosts        int
-	Ports        int
-	RelatedScans int
-	FirstSeen    string
-	LastSeen     string
-	Href         string
+	ID           string `json:"id"`
+	TemplateID   string `json:"templateId"`
+	Name         string `json:"name"`
+	Source       string `json:"source"`
+	Severity     string `json:"severity"`
+	SeverityTone string `json:"severityTone"`
+	Occurrences  int    `json:"occurrences"`
+	Hosts        int    `json:"hosts"`
+	Ports        int    `json:"ports"`
+	RelatedScans int    `json:"relatedScans"`
+	FirstSeen    string `json:"firstSeen"`
+	LastSeen     string `json:"lastSeen"`
+	Href         string `json:"href"`
 }
 
 type FindingOccurrenceView struct {
-	HostIP    string
-	HostLabel string
-	Target    string
-	Port      string
-	Scans     []string
-	MatchedAt string
-	Href      string
+	HostIP    string   `json:"hostIp"`
+	HostLabel string   `json:"hostLabel"`
+	Target    string   `json:"target"`
+	Port      string   `json:"port"`
+	Scans     []string `json:"scans"`
+	MatchedAt string   `json:"matchedAt"`
+	Href      string   `json:"href"`
 }
 
 type FindingDetailView struct {
-	Group        FindingGroupView
-	Occurrences  []FindingOccurrenceView
-	RelatedScans []ScanCatalogItem
-	RelatedJobs  []PluginJobView
-	Description  string
-	Tags         []string
+	Group        FindingGroupView        `json:"group"`
+	Occurrences  []FindingOccurrenceView `json:"occurrences"`
+	RelatedScans []ScanCatalogItem       `json:"relatedScans"`
+	RelatedJobs  []PluginJobView         `json:"relatedJobs"`
+	Description  string                  `json:"description"`
+	Tags         []string                `json:"tags"`
 }
 
 type FindingsPageData struct {

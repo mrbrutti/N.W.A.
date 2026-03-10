@@ -224,6 +224,24 @@ type PlatformFindingView struct {
 	Href         string `json:"href"`
 }
 
+type PlatformHostDetailAPI struct {
+	Host         HostDetail         `json:"host"`
+	RelatedZones []PlatformZoneView `json:"relatedZones"`
+	RecentRuns   []PlatformRunView  `json:"recentRuns"`
+	Findings     []FindingGroupView `json:"findings"`
+	PortSummary  []PlatformPortView `json:"portSummary"`
+}
+
+type PlatformPortDetailAPI struct {
+	Port       PortDetailView    `json:"port"`
+	RecentRuns []PlatformRunView `json:"recentRuns"`
+}
+
+type PlatformFindingDetailAPI struct {
+	Finding    FindingDetailView `json:"finding"`
+	RecentRuns []PlatformRunView `json:"recentRuns"`
+}
+
 type PlatformHealthView struct {
 	UserCount            int `json:"userCount"`
 	EngagementCount      int `json:"engagementCount"`
