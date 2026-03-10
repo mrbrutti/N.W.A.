@@ -38,15 +38,23 @@ import {
   adminToolsQuery,
   adminUsersQuery,
   adminWorkersQuery,
+  addEngagementMember,
+  approveEngagementApproval,
+  engagementCampaignsQuery,
   engagementFindingDetailQuery,
   engagementFindingsQuery,
   engagementHostDetailQuery,
   engagementHostsQuery,
   engagementPortDetailQuery,
   engagementPortsQuery,
+  engagementRecommendationsQuery,
+  engagementRunsQuery,
+  engagementSettingsQuery,
+  engagementSourcesQuery,
   engagementSummaryQuery,
   engagementZonesQuery,
   engagementsQuery,
+  importEngagementSource,
   login,
   logout,
   type FindingGroup,
@@ -58,6 +66,8 @@ import {
   type PlatformPagination,
   type PlatformPort,
   type SessionPayload,
+  requestEngagementRecommendations,
+  runEngagementCampaignAction,
   updateToolCommandTemplate,
 } from "./api";
 
@@ -196,6 +206,44 @@ function findingsSearchState(
     query: next.query ?? current.query,
     severity: next.severity ?? current.severity,
     sort: next.sort ?? current.sort,
+    page: next.page ?? current.page,
+    pageSize: next.pageSize ?? current.pageSize,
+  };
+}
+
+function dualListSearchState(
+  current: {
+    primaryPage: number;
+    primaryPageSize: number;
+    secondaryPage: number;
+    secondaryPageSize: number;
+  },
+  next: Partial<{
+    primaryPage: number;
+    primaryPageSize: number;
+    secondaryPage: number;
+    secondaryPageSize: number;
+  }>,
+) {
+  return {
+    primaryPage: next.primaryPage ?? current.primaryPage,
+    primaryPageSize: next.primaryPageSize ?? current.primaryPageSize,
+    secondaryPage: next.secondaryPage ?? current.secondaryPage,
+    secondaryPageSize: next.secondaryPageSize ?? current.secondaryPageSize,
+  };
+}
+
+function singlePageSearchState(
+  current: {
+    page: number;
+    pageSize: number;
+  },
+  next: Partial<{
+    page: number;
+    pageSize: number;
+  }>,
+) {
+  return {
     page: next.page ?? current.page,
     pageSize: next.pageSize ?? current.pageSize,
   };
@@ -397,6 +445,48 @@ const engagementFindingDetailRoute = createRoute({
   component: EngagementFindingDetailPage,
 });
 
+const engagementSourcesRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/sources",
+  validateSearch: (search: Record<string, unknown>) => ({
+    primaryPage: readInt(search.primaryPage, 1),
+    primaryPageSize: readPageSize(search.primaryPageSize),
+    secondaryPage: readInt(search.secondaryPage, 1),
+    secondaryPageSize: readPageSize(search.secondaryPageSize),
+  }),
+  component: EngagementSourcesPage,
+});
+
+const engagementCampaignsRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/campaigns",
+  validateSearch: (search: Record<string, unknown>) => ({
+    page: readInt(search.page, 1),
+    pageSize: readPageSize(search.pageSize),
+  }),
+  component: EngagementCampaignsPage,
+});
+
+const engagementRecommendationsRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/recommendations",
+  validateSearch: (search: Record<string, unknown>) => ({
+    page: readInt(search.page, 1),
+    pageSize: readPageSize(search.pageSize),
+  }),
+  component: EngagementRecommendationsPage,
+});
+
+const engagementSettingsRoute = createRoute({
+  getParentRoute: () => engagementRoute,
+  path: "/settings",
+  validateSearch: (search: Record<string, unknown>) => ({
+    page: readInt(search.page, 1),
+    pageSize: readPageSize(search.pageSize),
+  }),
+  component: EngagementSettingsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -419,6 +509,10 @@ const routeTree = rootRoute.addChildren([
     engagementPortDetailRoute,
     engagementFindingsRoute,
     engagementFindingDetailRoute,
+    engagementSourcesRoute,
+    engagementCampaignsRoute,
+    engagementRecommendationsRoute,
+    engagementSettingsRoute,
   ]),
 ]);
 
@@ -1108,6 +1202,30 @@ function EngagementLayout() {
               className={pathname.startsWith(`/engagements/${engagement.slug}/findings`) ? "is-active" : ""}
             >
               Findings
+            </a>
+            <a
+              href={`/app/engagements/${engagement.slug}/sources`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/sources`) ? "is-active" : ""}
+            >
+              Sources
+            </a>
+            <a
+              href={`/app/engagements/${engagement.slug}/campaigns`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/campaigns`) ? "is-active" : ""}
+            >
+              Campaigns
+            </a>
+            <a
+              href={`/app/engagements/${engagement.slug}/recommendations`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/recommendations`) ? "is-active" : ""}
+            >
+              Recommendations
+            </a>
+            <a
+              href={`/app/engagements/${engagement.slug}/settings`}
+              className={pathname.startsWith(`/engagements/${engagement.slug}/settings`) ? "is-active" : ""}
+            >
+              Settings
             </a>
           </div>
         }
@@ -2008,6 +2126,633 @@ function EngagementFindingDetailPage() {
           ]}
         />
       </Panel>
+    </div>
+  );
+}
+
+function EngagementSourcesPage() {
+  const { slug } = engagementRoute.useParams();
+  const search = engagementSourcesRoute.useSearch();
+  const queryClient = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const sources = useSuspenseQuery(
+    engagementSourcesQuery(slug, {
+      page: search.primaryPage,
+      pageSize: search.primaryPageSize,
+    }),
+  );
+  const runs = useSuspenseQuery(
+    engagementRunsQuery(slug, {
+      page: search.secondaryPage,
+      pageSize: search.secondaryPageSize,
+    }),
+  );
+  const navigate = useNavigate();
+  const mutation = useMutation({
+    mutationFn: () => {
+      if (!file) {
+        throw new Error("Choose a file before importing.");
+      }
+      return importEngagementSource(slug, file);
+    },
+    onSuccess: async () => {
+      setFile(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["engagement-sources", slug] }),
+        queryClient.invalidateQueries({ queryKey: ["engagement-runs", slug] }),
+        queryClient.invalidateQueries({ queryKey: ["engagements"] }),
+        queryClient.invalidateQueries({ queryKey: ["engagement-summary", slug] }),
+      ]);
+    },
+  });
+
+  return (
+    <div className="cc-stack">
+      <StatGrid
+        items={[
+          { label: "Sources", value: sources.data.pagination.total.toString(), detail: "Imported source packages in this engagement" },
+          { label: "Runs", value: runs.data.pagination.total.toString(), detail: "Execution history and connector activity" },
+        ]}
+      />
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Import source material" meta="Nmap, Nessus, Masscan, ZMap, Naabu and related reports">
+          <form
+            className="cc-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              mutation.mutate();
+            }}
+          >
+            <label className="cc-field">
+              <span>Scan file</span>
+              <input
+                type="file"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] || null);
+                }}
+              />
+            </label>
+            <button className="cc-button cc-button--primary" disabled={mutation.isPending || !file} type="submit">
+              {mutation.isPending ? "Importing" : "Import into engagement"}
+            </button>
+          </form>
+          {mutation.isError ? (
+            <InlineState tone="danger" title="Import failed" body={mutation.error.message} />
+          ) : null}
+        </Panel>
+
+        <Panel title="Recent execution" meta={`${runs.data.pagination.total} runs`}>
+          <RunList runs={runs.data.items} empty="No runs recorded for this engagement." />
+        </Panel>
+      </div>
+
+      <Panel title="Source catalog" meta={`${sources.data.pagination.total} sources`}>
+        <VirtualTable
+          columns={[
+            { key: "source", label: "Source", width: "1.2fr" },
+            { key: "scanner", label: "Scanner", width: "0.7fr" },
+            { key: "hosts", label: "Hosts", width: "0.5fr", align: "right" },
+            { key: "imported", label: "Imported", width: "0.8fr" },
+          ]}
+          items={sources.data.items}
+          getKey={(source) => source.id}
+          empty="No sources imported yet."
+          pagination={sources.data.pagination}
+          onPageChange={(page) => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/sources",
+                params: { slug },
+                search: () => dualListSearchState(search, { primaryPage: page }),
+                replace: true,
+              });
+            });
+          }}
+          onPageSizeChange={(pageSize) => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/sources",
+                params: { slug },
+                search: () => dualListSearchState(search, { primaryPage: 1, primaryPageSize: pageSize }),
+                replace: true,
+              });
+            });
+          }}
+          renderRow={(source) => [
+            <div key={`${source.id}-name`}>
+              <strong>{source.name}</strong>
+              <small>{source.kind}</small>
+            </div>,
+            <span key={`${source.id}-scanner`} className="cc-cell-meta">
+              {source.scanner || "Unknown"}
+            </span>,
+            <strong key={`${source.id}-hosts`} className="cc-cell-strong cc-cell-strong--right">
+              {source.liveHosts}
+            </strong>,
+            <span key={`${source.id}-imported`} className="cc-cell-meta">
+              {source.importedAt}
+            </span>,
+          ]}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+function EngagementCampaignsPage() {
+  const { slug } = engagementRoute.useParams();
+  const search = engagementCampaignsRoute.useSearch();
+  const queryClient = useQueryClient();
+  const [pluginId, setPluginId] = useState("");
+  const [targetMode, setTargetMode] = useState("profile");
+  const [targets, setTargets] = useState("");
+  const [profileScope, setProfileScope] = useState("all-hosts");
+  const campaigns = useSuspenseQuery(
+    engagementCampaignsQuery(slug, {
+      page: search.page,
+      pageSize: search.pageSize,
+    }),
+  );
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (pluginId || campaigns.data.tools.items.length === 0) {
+      return;
+    }
+    setPluginId(campaigns.data.tools.items[0]?.id || "");
+  }, [campaigns.data.tools.items, pluginId]);
+
+  const mutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>) => runEngagementCampaignAction(slug, payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["engagement-campaigns", slug] }),
+        queryClient.invalidateQueries({ queryKey: ["engagement-runs", slug] }),
+        queryClient.invalidateQueries({ queryKey: ["engagement-recommendations", slug] }),
+        queryClient.invalidateQueries({ queryKey: ["engagement-summary", slug] }),
+      ]);
+    },
+  });
+
+  return (
+    <div className="cc-stack">
+      <StatGrid
+        items={campaigns.data.stats.map((item) => ({
+          label: item.label,
+          value: item.value,
+          detail: item.detail,
+        }))}
+      />
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Quick launch" meta={`${campaigns.data.runProfiles.length} profile shortcuts`}>
+          <div className="cc-chip-grid">
+            {campaigns.data.runProfiles.map((profile) => (
+              <button
+                className="cc-button"
+                disabled={mutation.isPending}
+                key={`${profile.pluginId}-${profile.profileScope}`}
+                onClick={() =>
+                  mutation.mutate({
+                    action: "queue_run",
+                    pluginId: profile.pluginId,
+                    targetMode: "profile",
+                    profileScope: profile.profileScope,
+                    profile: profile.profile,
+                    severity: profile.severity,
+                    crawlDepth: profile.crawlDepth,
+                  })
+                }
+                type="button"
+              >
+                {profile.label}
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel title="Manual run" meta="Queue any registered managed command or connector">
+          <form
+            className="cc-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              mutation.mutate({
+                action: "queue_run",
+                pluginId,
+                targetMode,
+                targets: targets
+                  .split("\n")
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+                profileScope,
+              });
+            }}
+          >
+            <label className="cc-field">
+              <span>Tool</span>
+              <select value={pluginId} onChange={(event) => setPluginId(event.target.value)}>
+                {campaigns.data.tools.items.map((tool) => (
+                  <option key={tool.id} value={tool.id}>
+                    {tool.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="cc-field">
+              <span>Target mode</span>
+              <select value={targetMode} onChange={(event) => setTargetMode(event.target.value)}>
+                <option value="profile">Profile</option>
+                <option value="engagement">Entire engagement</option>
+                <option value="manual">Manual targets</option>
+              </select>
+            </label>
+            <label className="cc-field">
+              <span>Profile scope</span>
+              <select value={profileScope} onChange={(event) => setProfileScope(event.target.value)}>
+                <option value="all-hosts">All hosts</option>
+                <option value="high-exposure">High exposure</option>
+                <option value="web">Web surfaces</option>
+                <option value="coverage-gap">Coverage gap</option>
+              </select>
+            </label>
+            {targetMode === "manual" ? (
+              <label className="cc-field">
+                <span>Targets</span>
+                <textarea
+                  value={targets}
+                  onChange={(event) => setTargets(event.target.value)}
+                  placeholder="One IP, CIDR, hostname, or URL per line"
+                />
+              </label>
+            ) : null}
+            <button className="cc-button cc-button--primary" disabled={mutation.isPending || !pluginId} type="submit">
+              {mutation.isPending ? "Queueing" : "Queue run"}
+            </button>
+          </form>
+          {mutation.isError ? (
+            <InlineState tone="danger" title="Run request failed" body={mutation.error.message} />
+          ) : null}
+        </Panel>
+      </div>
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Policies" meta={`${campaigns.data.policies.length} orchestration policies`}>
+          <List
+            items={campaigns.data.policies.map((policy) => ({
+              key: policy.id,
+              label: policy.name,
+              detail: `${policy.steps.length} steps · ${policy.active ? "active" : "inactive"}`,
+              onClick: () =>
+                mutation.mutate({
+                  action: "activate_policy",
+                  policyId: policy.id,
+                }),
+            }))}
+            empty="No orchestration policies defined."
+          />
+        </Panel>
+
+        <Panel title="Tool readiness" meta={`${campaigns.data.readiness.length} readiness groups`}>
+          <List
+            items={campaigns.data.readiness.map((group) => ({
+              key: group.label,
+              label: `${group.label} · ${group.ready}/${group.total}`,
+              detail: group.detail,
+            }))}
+            empty="No readiness data available."
+          />
+        </Panel>
+      </div>
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Run queue" meta={`${campaigns.data.runs.pagination.total} runs`}>
+          <VirtualTable
+            columns={[
+              { key: "tool", label: "Tool", width: "0.95fr" },
+              { key: "chunk", label: "Chunk", width: "1.1fr" },
+              { key: "status", label: "Status", width: "0.6fr" },
+              { key: "targets", label: "Targets", width: "0.45fr", align: "right" },
+            ]}
+            items={campaigns.data.runs.items}
+            getKey={(run) => run.id}
+            empty="No runs queued for this engagement."
+            pagination={campaigns.data.runs.pagination}
+            onPageChange={(page) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/campaigns",
+                  params: { slug },
+                  search: () => singlePageSearchState(search, { page }),
+                  replace: true,
+                });
+              });
+            }}
+            onPageSizeChange={(pageSize) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/campaigns",
+                  params: { slug },
+                  search: () => singlePageSearchState(search, { page: 1, pageSize }),
+                  replace: true,
+                });
+              });
+            }}
+            renderRow={(run) => [
+              <div key={`${run.id}-tool`}>
+                <strong>{run.toolLabel}</strong>
+                <small>{run.stage}</small>
+              </div>,
+              <span key={`${run.id}-chunk`} className="cc-cell-meta">
+                {run.chunkName || run.summary}
+              </span>,
+              <StatusBadge key={`${run.id}-status`} tone={run.statusTone} label={run.status} />,
+              <strong key={`${run.id}-targets`} className="cc-cell-strong cc-cell-strong--right">
+                {run.targetCount}
+              </strong>,
+            ]}
+          />
+        </Panel>
+
+        <Panel title="Execution chunks" meta={`${campaigns.data.chunks.pagination.total} chunks`}>
+          <List
+            items={campaigns.data.chunks.items.map((chunk) => ({
+              key: chunk.id,
+              label: `${chunk.name} · ${chunk.status}`,
+              detail: `${chunk.stage} · ${chunk.kind} · ${chunk.size} targets`,
+            }))}
+            empty="No execution chunks staged yet."
+          />
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function EngagementRecommendationsPage() {
+  const { slug } = engagementRoute.useParams();
+  const search = engagementRecommendationsRoute.useSearch();
+  const queryClient = useQueryClient();
+  const [campaignId, setCampaignId] = useState("");
+  const recommendations = useSuspenseQuery(
+    engagementRecommendationsQuery(slug, {
+      page: search.page,
+      pageSize: search.pageSize,
+    }),
+  );
+  const navigate = useNavigate();
+  const llmMutation = useMutation({
+    mutationFn: () => requestEngagementRecommendations(slug, campaignId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["engagement-recommendations", slug] });
+    },
+  });
+  const approvalMutation = useMutation({
+    mutationFn: (approvalID: string) => approveEngagementApproval(slug, approvalID),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["engagement-recommendations", slug] }),
+        queryClient.invalidateQueries({ queryKey: ["engagement-campaigns", slug] }),
+      ]);
+    },
+  });
+
+  return (
+    <div className="cc-stack">
+      <StatGrid
+        items={[
+          { label: "Recommendations", value: recommendations.data.recommendations.pagination.total.toString(), detail: "Queued next-step suggestions" },
+          { label: "Approvals", value: recommendations.data.approvals.pagination.total.toString(), detail: "Operator gates waiting for action" },
+        ]}
+      />
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Refresh recommendation queue" meta="Planner-backed suggestions">
+          <form
+            className="cc-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              llmMutation.mutate();
+            }}
+          >
+            <label className="cc-field">
+              <span>Campaign ID</span>
+              <input
+                placeholder="Optional campaign scope"
+                value={campaignId}
+                onChange={(event) => setCampaignId(event.target.value)}
+              />
+            </label>
+            <button className="cc-button cc-button--primary" disabled={llmMutation.isPending} type="submit">
+              {llmMutation.isPending ? "Requesting" : "Generate recommendations"}
+            </button>
+          </form>
+          {llmMutation.isError ? (
+            <InlineState tone="danger" title="Planner request failed" body={llmMutation.error.message} />
+          ) : null}
+        </Panel>
+
+        <Panel title="Approvals" meta={`${recommendations.data.approvals.pagination.total} pending`}>
+          <List
+            items={recommendations.data.approvals.items.map((approval) => ({
+              key: approval.id,
+              label: approval.summary,
+              detail: `${approval.scope} · ${approval.requiredClass}`,
+              onClick: () => approvalMutation.mutate(approval.id),
+            }))}
+            empty="No approvals are waiting."
+          />
+          {approvalMutation.isError ? (
+            <InlineState tone="danger" title="Approval failed" body={approvalMutation.error.message} />
+          ) : null}
+        </Panel>
+      </div>
+
+      <Panel title="Recommendation queue" meta={`${recommendations.data.recommendations.pagination.total} items`}>
+        <VirtualTable
+          columns={[
+            { key: "title", label: "Recommendation", width: "1.2fr" },
+            { key: "type", label: "Type", width: "0.55fr" },
+            { key: "status", label: "Status", width: "0.55fr" },
+            { key: "confidence", label: "Confidence", width: "0.55fr" },
+          ]}
+          items={recommendations.data.recommendations.items}
+          getKey={(recommendation) => recommendation.id}
+          empty="No recommendations queued."
+          pagination={recommendations.data.recommendations.pagination}
+          onPageChange={(page) => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/recommendations",
+                params: { slug },
+                search: () => singlePageSearchState(search, { page }),
+                replace: true,
+              });
+            });
+          }}
+          onPageSizeChange={(pageSize) => {
+            startTransition(() => {
+              void navigate({
+                to: "/engagements/$slug/recommendations",
+                params: { slug },
+                search: () => singlePageSearchState(search, { page: 1, pageSize }),
+                replace: true,
+              });
+            });
+          }}
+          renderRow={(recommendation) => [
+            <div key={`${recommendation.id}-title`}>
+              <strong>{recommendation.title}</strong>
+              <small>{recommendation.detail}</small>
+            </div>,
+            <span key={`${recommendation.id}-type`} className="cc-cell-meta">
+              {recommendation.type}
+            </span>,
+            <StatusBadge key={`${recommendation.id}-status`} tone={recommendation.statusTone} label={recommendation.status} />,
+            <span key={`${recommendation.id}-confidence`} className="cc-cell-meta">
+              {recommendation.confidence || "n/a"}
+            </span>,
+          ]}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+function EngagementSettingsPage() {
+  const { slug } = engagementRoute.useParams();
+  const search = engagementSettingsRoute.useSearch();
+  const queryClient = useQueryClient();
+  const [selectedUser, setSelectedUser] = useState("");
+  const [selectedRole, setSelectedRole] = useState("viewer");
+  const settings = useSuspenseQuery(
+    engagementSettingsQuery(slug, {
+      page: search.page,
+      pageSize: search.pageSize,
+    }),
+  );
+  const navigate = useNavigate();
+  const mutation = useMutation({
+    mutationFn: () => addEngagementMember(slug, { user: selectedUser, role: selectedRole }),
+    onSuccess: async () => {
+      setSelectedUser("");
+      setSelectedRole("viewer");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["engagement-settings", slug] }),
+        queryClient.invalidateQueries({ queryKey: ["engagements"] }),
+      ]);
+    },
+  });
+
+  return (
+    <div className="cc-stack">
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Memberships" meta={`${settings.data.memberships.pagination.total} members`}>
+          <VirtualTable
+            columns={[
+              { key: "user", label: "User", width: "1fr" },
+              { key: "role", label: "Role", width: "0.6fr" },
+              { key: "joined", label: "Joined", width: "0.8fr" },
+            ]}
+            items={settings.data.memberships.items}
+            getKey={(member) => member.userId}
+            empty="No engagement members configured."
+            pagination={settings.data.memberships.pagination}
+            onPageChange={(page) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/settings",
+                  params: { slug },
+                  search: () => singlePageSearchState(search, { page }),
+                  replace: true,
+                });
+              });
+            }}
+            onPageSizeChange={(pageSize) => {
+              startTransition(() => {
+                void navigate({
+                  to: "/engagements/$slug/settings",
+                  params: { slug },
+                  search: () => singlePageSearchState(search, { page: 1, pageSize }),
+                  replace: true,
+                });
+              });
+            }}
+            renderRow={(member) => [
+              <div key={`${member.userId}-user`}>
+                <strong>{member.displayName}</strong>
+                <small>{member.username} · {member.email}</small>
+              </div>,
+              <span key={`${member.userId}-role`} className="cc-cell-meta">
+                {member.role}
+              </span>,
+              <span key={`${member.userId}-joined`} className="cc-cell-meta">
+                {member.joinedAt}
+              </span>,
+            ]}
+          />
+        </Panel>
+
+        <Panel title="Add member" meta="Owners and admins can share the engagement">
+          <form
+            className="cc-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              mutation.mutate();
+            }}
+          >
+            <label className="cc-field">
+              <span>User</span>
+              <select value={selectedUser} onChange={(event) => setSelectedUser(event.target.value)}>
+                <option value="">Select a user</option>
+                {settings.data.users.items.map((user) => (
+                  <option key={user.id} value={user.username}>
+                    {user.displayName} ({user.username})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="cc-field">
+              <span>Role</span>
+              <select value={selectedRole} onChange={(event) => setSelectedRole(event.target.value)}>
+                <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
+                <option value="owner">Owner</option>
+              </select>
+            </label>
+            <button className="cc-button cc-button--primary" disabled={mutation.isPending || !selectedUser} type="submit">
+              {mutation.isPending ? "Adding" : "Add member"}
+            </button>
+          </form>
+          {mutation.isError ? (
+            <InlineState tone="danger" title="Membership update failed" body={mutation.error.message} />
+          ) : null}
+        </Panel>
+      </div>
+
+      <div className="cc-grid cc-grid--two">
+        <Panel title="Tool posture" meta={`${settings.data.tools.pagination.total} tools`}>
+          <List
+            items={settings.data.tools.items.map((tool) => ({
+              key: tool.id,
+              label: tool.label,
+              detail: `${tool.kind} · ${tool.status} · ${tool.statusDetail}`,
+            }))}
+            empty="No tools registered."
+          />
+        </Panel>
+
+        <Panel title="Connector posture" meta={`${settings.data.connectors.pagination.total} connectors`}>
+          <List
+            items={settings.data.connectors.items.map((connector) => ({
+              key: connector.id,
+              label: connector.label,
+              detail: `${connector.status} · ${connector.statusDetail}`,
+            }))}
+            empty="No connectors registered."
+          />
+        </Panel>
+      </div>
     </div>
   );
 }

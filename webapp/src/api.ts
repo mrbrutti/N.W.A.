@@ -562,6 +562,7 @@ export type EngagementSettingsPayload = {
     role: string;
     joinedAt: string;
   }>;
+  users: ListResponse<PlatformUser>;
   tools: ListResponse<PlatformTool>;
   connectors: ListResponse<PlatformConnector>;
 };
@@ -591,11 +592,12 @@ export class ApiError extends Error {
 }
 
 async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const hasJSONBody = init?.body && !(init.body instanceof FormData);
   const response = await fetch(path, {
     credentials: "include",
     headers: {
       Accept: "application/json",
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(hasJSONBody ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },
     ...init,
@@ -615,6 +617,10 @@ async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
 
   return payload as T;
 }
+
+type MutationStatus = {
+  status: string;
+};
 
 function withSearchParams(
   path: string,
@@ -828,18 +834,30 @@ export function engagementFindingDetailQuery(slug: string, groupID: string) {
   });
 }
 
-export function engagementSourcesQuery(slug: string) {
+export function engagementSourcesQuery(slug: string, search: { page?: number; pageSize?: number } = {}) {
   return queryOptions({
-    queryKey: ["engagement-sources", slug],
-    queryFn: () => requestJSON<ListResponse<PlatformSource>>(`/api/v1/engagements/${slug}/sources`),
+    queryKey: ["engagement-sources", slug, search.page || 1, search.pageSize || 20],
+    queryFn: () =>
+      requestJSON<ListResponse<PlatformSource>>(
+        withSearchParams(`/api/v1/engagements/${slug}/sources`, {
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
     staleTime: 30_000,
   });
 }
 
-export function engagementRunsQuery(slug: string) {
+export function engagementRunsQuery(slug: string, search: { page?: number; pageSize?: number } = {}) {
   return queryOptions({
-    queryKey: ["engagement-runs", slug],
-    queryFn: () => requestJSON<ListResponse<PlatformRun>>(`/api/v1/engagements/${slug}/runs`),
+    queryKey: ["engagement-runs", slug, search.page || 1, search.pageSize || 20],
+    queryFn: () =>
+      requestJSON<ListResponse<PlatformRun>>(
+        withSearchParams(`/api/v1/engagements/${slug}/runs`, {
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
     staleTime: 15_000,
   });
 }
@@ -852,26 +870,44 @@ export function engagementScopeQuery(slug: string) {
   });
 }
 
-export function engagementCampaignsQuery(slug: string) {
+export function engagementCampaignsQuery(slug: string, search: { page?: number; pageSize?: number } = {}) {
   return queryOptions({
-    queryKey: ["engagement-campaigns", slug],
-    queryFn: () => requestJSON<EngagementCampaignsPayload>(`/api/v1/engagements/${slug}/campaigns`),
+    queryKey: ["engagement-campaigns", slug, search.page || 1, search.pageSize || 20],
+    queryFn: () =>
+      requestJSON<EngagementCampaignsPayload>(
+        withSearchParams(`/api/v1/engagements/${slug}/campaigns`, {
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
     staleTime: 15_000,
   });
 }
 
-export function engagementRecommendationsQuery(slug: string) {
+export function engagementRecommendationsQuery(slug: string, search: { page?: number; pageSize?: number } = {}) {
   return queryOptions({
-    queryKey: ["engagement-recommendations", slug],
-    queryFn: () => requestJSON<EngagementRecommendationsPayload>(`/api/v1/engagements/${slug}/recommendations`),
+    queryKey: ["engagement-recommendations", slug, search.page || 1, search.pageSize || 20],
+    queryFn: () =>
+      requestJSON<EngagementRecommendationsPayload>(
+        withSearchParams(`/api/v1/engagements/${slug}/recommendations`, {
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
     staleTime: 15_000,
   });
 }
 
-export function engagementSettingsQuery(slug: string) {
+export function engagementSettingsQuery(slug: string, search: { page?: number; pageSize?: number } = {}) {
   return queryOptions({
-    queryKey: ["engagement-settings", slug],
-    queryFn: () => requestJSON<EngagementSettingsPayload>(`/api/v1/engagements/${slug}/settings`),
+    queryKey: ["engagement-settings", slug, search.page || 1, search.pageSize || 20],
+    queryFn: () =>
+      requestJSON<EngagementSettingsPayload>(
+        withSearchParams(`/api/v1/engagements/${slug}/settings`, {
+          page: search.page,
+          page_size: search.pageSize,
+        }),
+      ),
     staleTime: 30_000,
   });
 }
@@ -895,6 +931,45 @@ export async function updateToolCommandTemplate(
 ) {
   return requestJSON<PlatformTool>(`/api/v1/admin/tools/${toolID}`, {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function importEngagementSource(slug: string, file: File) {
+  const form = new FormData();
+  form.set("scan_file", file);
+  return requestJSON<MutationStatus>(`/api/v1/engagements/${slug}/sources/import`, {
+    method: "POST",
+    body: form,
+    headers: {
+      Accept: "application/json",
+    },
+  });
+}
+
+export async function runEngagementCampaignAction(slug: string, payload: Record<string, unknown>) {
+  return requestJSON<MutationStatus>(`/api/v1/engagements/${slug}/campaigns/run`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function approveEngagementApproval(slug: string, approvalID: string) {
+  return requestJSON<MutationStatus>(`/api/v1/engagements/${slug}/approvals/${encodeURIComponent(approvalID)}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function requestEngagementRecommendations(slug: string, campaignId = "") {
+  return requestJSON<MutationStatus>(`/api/v1/engagements/${slug}/recommendations/llm`, {
+    method: "POST",
+    body: JSON.stringify({ campaignId }),
+  });
+}
+
+export async function addEngagementMember(slug: string, payload: { user: string; role: string }) {
+  return requestJSON<MutationStatus>(`/api/v1/engagements/${slug}/settings/members`, {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }

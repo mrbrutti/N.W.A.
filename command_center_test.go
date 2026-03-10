@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -159,8 +160,11 @@ func TestPlatformLoginAndEngagementCreationFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("engagement page error = %v", err)
 	}
-	if pageResponse.StatusCode != http.StatusOK {
-		t.Fatalf("engagement page status = %d, want %d", pageResponse.StatusCode, http.StatusOK)
+	if pageResponse.StatusCode != http.StatusSeeOther {
+		t.Fatalf("engagement page status = %d, want %d", pageResponse.StatusCode, http.StatusSeeOther)
+	}
+	if got := pageResponse.Header.Get("Location"); got != "/app/engagements/acme-external" {
+		t.Fatalf("engagement page Location = %q, want %q", got, "/app/engagements/acme-external")
 	}
 }
 
@@ -656,6 +660,212 @@ func TestEngagementInventoryRoutesRedirectAndDetailJSON(t *testing.T) {
 		if location := response.Header.Get("Location"); location != want {
 			t.Fatalf("GET %s Location = %q, want %q", path, location, want)
 		}
+	}
+}
+
+func TestEngagementWorkflowJSONMutationsAndReactRedirects(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	t.Setenv("NWA_ADMIN_PASSWORD", "adminpass")
+	t.Setenv("NWA_CODEX_CMD", filepath.Join(t.TempDir(), "missing-codex"))
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "empty-codex-home"))
+	app, err := newApplicationWithConfig(applicationConfig{
+		SeedFiles:       []string{writeSnapshotFixture(t)},
+		DBDSN:           filepath.Join(t.TempDir(), "service.sqlite"),
+		DataDir:         filepath.Join(t.TempDir(), "data"),
+		WorkspaceTarget: "engagement-alpha",
+	}, logger)
+	if err != nil {
+		t.Fatalf("newApplicationWithConfig() error = %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := app.platform.store.createUser(platformUserRecord{
+		ID:           newWorkspaceID("user"),
+		Username:     "analyst",
+		Email:        "analyst@example.com",
+		DisplayName:  "Analyst User",
+		PasswordHash: "unused",
+		Status:       "active",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("createUser() error = %v", err)
+	}
+
+	handler, err := app.routes()
+	if err != nil {
+		t.Fatalf("routes() error = %v", err)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookiejar.New() error = %v", err)
+	}
+	client := &http.Client{
+		Jar: jar,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	if _, err := client.PostForm(server.URL+"/login", url.Values{
+		"login":    {"admin"},
+		"password": {"adminpass"},
+	}); err != nil {
+		t.Fatalf("login request error = %v", err)
+	}
+
+	engagement, err := app.platform.store.engagementByWorkspaceID(app.workspace.id)
+	if err != nil {
+		t.Fatalf("engagementByWorkspaceID() error = %v", err)
+	}
+	workspace, _, err := app.center.loadWorkspaceByID(engagement.LegacyWorkspaceID)
+	if err != nil {
+		t.Fatalf("loadWorkspaceByID() error = %v", err)
+	}
+	workspace.plugins.mu.Lock()
+	workspace.plugins.plugins["fake-manual"] = fakePlugin{id: "fake-manual", label: "Fake Manual"}
+	workspace.plugins.mu.Unlock()
+
+	postJSON := func(path string, payload any) *http.Response {
+		t.Helper()
+		body, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("Marshal(%s) error = %v", path, err)
+		}
+		request, err := http.NewRequest(http.MethodPost, server.URL+path, bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("NewRequest(%s) error = %v", path, err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("POST %s error = %v", path, err)
+		}
+		return response
+	}
+
+	importFixture := writeSnapshotFixture(t)
+	uploadBody := &bytes.Buffer{}
+	writer := multipart.NewWriter(uploadBody)
+	fileWriter, err := writer.CreateFormFile("scan_file", filepath.Base(importFixture))
+	if err != nil {
+		t.Fatalf("CreateFormFile() error = %v", err)
+	}
+	fileHandle, err := os.Open(importFixture)
+	if err != nil {
+		t.Fatalf("Open(%s) error = %v", importFixture, err)
+	}
+	if _, err := io.Copy(fileWriter, fileHandle); err != nil {
+		_ = fileHandle.Close()
+		t.Fatalf("io.Copy() error = %v", err)
+	}
+	_ = fileHandle.Close()
+	if err := writer.Close(); err != nil {
+		t.Fatalf("multipart writer close error = %v", err)
+	}
+
+	importRequest, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/engagements/engagement-alpha/sources/import", uploadBody)
+	if err != nil {
+		t.Fatalf("NewRequest(import) error = %v", err)
+	}
+	importRequest.Header.Set("Content-Type", writer.FormDataContentType())
+	importResponse, err := client.Do(importRequest)
+	if err != nil {
+		t.Fatalf("POST source import error = %v", err)
+	}
+	if importResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("source import status = %d, want %d", importResponse.StatusCode, http.StatusAccepted)
+	}
+	_ = importResponse.Body.Close()
+
+	runResponse := postJSON("/api/v1/engagements/engagement-alpha/campaigns/run", map[string]any{
+		"action":     "queue_run",
+		"pluginId":   "fake-manual",
+		"targetMode": "manual",
+		"targets":    []string{"10.0.0.9"},
+	})
+	if runResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("campaign run status = %d, want %d", runResponse.StatusCode, http.StatusAccepted)
+	}
+	_ = runResponse.Body.Close()
+
+	if _, err := workspace.ingestScope("Needs approval", "203.0.113.0/24", "test", false); err != nil {
+		t.Fatalf("ingestScope() error = %v", err)
+	}
+	approvals := workspace.approvalViews()
+	if len(approvals) == 0 {
+		t.Fatal("expected pending approval after scope ingest")
+	}
+	approvalResponse := postJSON("/api/v1/engagements/engagement-alpha/approvals/"+url.PathEscape(approvals[0].ID)+"/approve", map[string]any{})
+	if approvalResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("approval status = %d, want %d", approvalResponse.StatusCode, http.StatusAccepted)
+	}
+	_ = approvalResponse.Body.Close()
+
+	recommendationResponse := postJSON("/api/v1/engagements/engagement-alpha/recommendations/llm", map[string]any{
+		"campaignId": "",
+	})
+	if recommendationResponse.StatusCode != http.StatusAccepted && recommendationResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("recommendation status = %d, want %d or %d", recommendationResponse.StatusCode, http.StatusAccepted, http.StatusBadRequest)
+	}
+	_ = recommendationResponse.Body.Close()
+
+	memberResponse := postJSON("/api/v1/engagements/engagement-alpha/settings/members", map[string]any{
+		"user": "analyst",
+		"role": "editor",
+	})
+	if memberResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("membership status = %d, want %d", memberResponse.StatusCode, http.StatusCreated)
+	}
+	_ = memberResponse.Body.Close()
+
+	for path, want := range map[string]string{
+		"/engagements/engagement-alpha":                 "/app/engagements/engagement-alpha",
+		"/engagements/engagement-alpha/sources":         "/app/engagements/engagement-alpha/sources",
+		"/engagements/engagement-alpha/campaigns":       "/app/engagements/engagement-alpha/campaigns",
+		"/engagements/engagement-alpha/recommendations": "/app/engagements/engagement-alpha/recommendations",
+		"/engagements/engagement-alpha/settings":        "/app/engagements/engagement-alpha/settings",
+	} {
+		response, err := client.Get(server.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s error = %v", path, err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusSeeOther {
+			t.Fatalf("GET %s status = %d, want %d", path, response.StatusCode, http.StatusSeeOther)
+		}
+		if location := response.Header.Get("Location"); location != want {
+			t.Fatalf("GET %s Location = %q, want %q", path, location, want)
+		}
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(workspace.plugins.recentJobs(10)) > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(workspace.plugins.recentJobs(10)) == 0 {
+		t.Fatal("campaign action did not queue a job")
+	}
+
+	memberships, err := app.platform.store.listMemberships(engagement.ID)
+	if err != nil {
+		t.Fatalf("listMemberships() error = %v", err)
+	}
+	foundAnalyst := false
+	for _, membership := range memberships {
+		if membership.Username == "analyst" && membership.Role == "editor" {
+			foundAnalyst = true
+			break
+		}
+	}
+	if !foundAnalyst {
+		t.Fatal("engagement membership JSON action did not persist the analyst user")
 	}
 }
 
